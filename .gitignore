@@ -1,0 +1,9 @@
+/.venv
+/.vscode
+/data.xlsx
+/decile.csv
+/dup.csv
+/duplicated.xlsx
+/plots
+/__pycache__
+/~$data.xlsx
