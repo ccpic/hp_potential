@@ -35,19 +35,9 @@ class Potential(pd.DataFrame):
         self.name = name
         self.savepath = savepath
 
-    def get_decile(self):  # 计算各终端潜力分位
-        df = self.sort_values(by=["终端潜力值"])
-        df["潜力分位"] = (
-            np.floor(df["终端潜力值"].cumsum() / df["终端潜力值"].sum() * 10) + 1
-        ).astype("int")
-
-        df.sort_values(by=["终端潜力值"], ascending=False, inplace=True)
-        return df
-
     def get_decile_groupby(self, columns):  # 潜力分位相关的透视表
-        df = self.get_decile()
         pivoted = pd.pivot_table(
-            data=df, values="医院名称", index="潜力分位", columns=columns, aggfunc=len
+            data=self, values="医院名称", index="潜力分位", columns=columns, aggfunc=len
         )
         pivoted.sort_index(ascending=False, inplace=True)
         return pivoted
