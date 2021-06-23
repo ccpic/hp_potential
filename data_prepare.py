@@ -44,9 +44,9 @@ def prepare_data():
         lambda row: "非目标医院"
         if pd.isna(row["医院编码"])
         else (
-            "无销量的目标医院"
+            "无销量目标医院"
             if pd.isna(row["MAT销量标准片数"]) or row["MAT销量标准片数"] == 0
-            else "有销量的目标医院"
+            else "有销量目标医院"
         ),
         axis=1,
     )

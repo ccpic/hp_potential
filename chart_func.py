@@ -23,8 +23,11 @@ MYFONT = fm.FontProperties(fname="C:/Windows/Fonts/msyh.ttc")
 NUM_FONT = {"fontname": "Calibri"}
 
 COLOR_DICT = {
-    "公立医院": "navy",
-    "社区医院": "crimson",
+    "公立医院": "crimson",
+    "社区医院": "navy",
+    "非目标医院": "grey",
+    "有销量目标医院": "navy",
+    "无销量目标医院": "dodgerblue",
     "拜阿司匹灵": "navy",
     "波立维": "crimson",
     "泰嘉": "teal",
@@ -657,22 +660,22 @@ def plot_barh(
     save_plot(savefile)
 
 
-def plot_pie(savefile, sizelist, labellist, focus, title):
+def plot_pie(savefile, sizes, labels, focus=None, title=""):
     # sns.set_style("white")
 
     # Prepare the white center circle for Donat shape
     my_circle = plt.Circle((0, 0), 0.7, color="white")
 
-    sizelist = sizelist.transform(lambda x: x / x.sum())
-    print(sizelist)
+    sizes = sizes / sizes.sum()
+    print(sizes)
     sizelist_mask = []
-    for size in sizelist:
+    for size in sizes:
         sizelist_mask.append(abs(size))
 
     # Draw the pie chart
     wedges, texts, autotexts = plt.pie(
         sizelist_mask,
-        labels=labellist,
+        labels=labels,
         autopct="%1.1f%%",
         pctdistance=0.85,
         wedgeprops={"linewidth": 3, "edgecolor": "white"},
@@ -682,19 +685,22 @@ def plot_pie(savefile, sizelist, labellist, focus, title):
     )
 
     for i, pie_wedge in enumerate(wedges):
-        # pie_wedge.set_facecolor(COLOR_DICT[pie_wedge.get_label()])
-
+        try:
+            pie_wedge.set_facecolor(COLOR_DICT[pie_wedge.get_label()])
+        except:
+            pass
+        
         if focus is not None:
             if pie_wedge.get_label() == focus:
                 pie_wedge.set_hatch("//")
-        if sizelist[i] < 0:
+        if sizes[i] < 0:
             pie_wedge.set_facecolor("white")
 
     for i, autotext in enumerate(autotexts):
         autotext.set_color("white")
         autotext.set_fontsize(10)
-        autotext.set_text("{:.1%}".format(sizelist[i]))
-        if sizelist[i] < 0:
+        autotext.set_text("{:.1%}".format(sizes[i]))
+        if sizes[i] < 0:
             autotext.set_color("r")
 
     # Add title at the center
@@ -1191,6 +1197,7 @@ def plot_barline(
     ytitle=None,
     percentage=False,
     percentage_label=False,
+    show_total=False,
 ):
     # 转换为百分百堆积柱状图
     if percentage:
@@ -1254,6 +1261,19 @@ def plot_barline(
                 color="white",
                 fontproperties=MYFONT,
                 fontsize=10,
+            )
+
+    """在柱状图顶端添加total值"""
+    if show_total:
+        total = df_data.sum(axis=1)
+        for j, v in enumerate(total.values):
+            ax.text(
+                x=j,
+                y=v,
+                s=y1labelfmt.format(float(v)),
+                fontsize=14,
+                ha="center",
+                va="bottom",
             )
 
     if df_line is not None:
