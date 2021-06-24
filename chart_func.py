@@ -4,6 +4,7 @@ from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 import matplotlib.font_manager as fm
 import numpy as np
+import pandas as pd
 import types
 from adjustText import adjust_text
 import itertools
@@ -689,7 +690,7 @@ def plot_pie(savefile, sizes, labels, focus=None, title=""):
             pie_wedge.set_facecolor(COLOR_DICT[pie_wedge.get_label()])
         except:
             pass
-        
+
         if focus is not None:
             if pie_wedge.get_label() == focus:
                 pie_wedge.set_hatch("//")
@@ -1188,6 +1189,7 @@ def plot_barline(
     height=6,
     xlabel_rotation=0,
     y1fmt="{:.0%}",
+    show_y1label=True,
     y1labelfmt="{:.0%}",
     y1labelthreshold=0.015,
     y2fmt="{:.0%}",
@@ -1198,6 +1200,7 @@ def plot_barline(
     percentage=False,
     percentage_label=False,
     show_total=False,
+    total_fontsize=14,
 ):
     # 转换为百分百堆积柱状图
     if percentage:
@@ -1211,7 +1214,7 @@ def plot_barline(
         figsize=(width, height),
         alpha=0.8,
         edgecolor="black",
-        color=[COLOR_DICT.get(x, "#333333") for x in df_data.columns],
+        color=[COLOR_DICT.get(x, "navy") for x in df_data.columns],
     )
 
     plt.title(title, fontproperties=MYFONT, fontsize=18)
@@ -1241,27 +1244,29 @@ def plot_barline(
             label = str(df_label.loc[i][j])
             labels.append(label)
 
-    patches = ax.patches
-    for label, rect in zip(labels, patches):
-        height = rect.get_height()
-        # 负数则添加纹理
-        if height < 0:
-            rect.set_hatch("//")
-        # 隐藏过小的数
-        if abs(height) > y1labelthreshold:
-            x = rect.get_x()
-            y = rect.get_y()
-            width = rect.get_width()
-            ax.text(
-                x + width / 2.0,
-                y + height / 2.0,
-                y1labelfmt.format(float(label)),
-                ha="center",
-                va="center",
-                color="white",
-                fontproperties=MYFONT,
-                fontsize=10,
-            )
+    """展示柱状图系列标签 """
+    if show_y1label:
+        patches = ax.patches
+        for label, rect in zip(labels, patches):
+            height = rect.get_height()
+            # 负数则添加纹理
+            if height < 0:
+                rect.set_hatch("//")
+            # 隐藏过小的数
+            if abs(height) > y1labelthreshold:
+                x = rect.get_x()
+                y = rect.get_y()
+                width = rect.get_width()
+                ax.text(
+                    x + width / 2.0,
+                    y + height / 2.0,
+                    y1labelfmt.format(float(label)),
+                    ha="center",
+                    va="center",
+                    color="white",
+                    fontproperties=MYFONT,
+                    fontsize=10,
+                )
 
     """在柱状图顶端添加total值"""
     if show_total:
@@ -1271,7 +1276,7 @@ def plot_barline(
                 x=j,
                 y=v,
                 s=y1labelfmt.format(float(v)),
-                fontsize=14,
+                fontsize=total_fontsize,
                 ha="center",
                 va="bottom",
             )
@@ -1281,10 +1286,15 @@ def plot_barline(
         # 增加次坐标轴
         ax2 = ax.twinx()
 
+        if isinstance(df_line, pd.DataFrame):
+            label = df_line.columns[0]
+        else:
+            label = df_line.name
+
         ax2.plot(
             df_line.index,
             df_line.values,
-            label=df_line.name,
+            label=label,
             color="crimson",
             linewidth=2,
             marker="o",
@@ -1293,15 +1303,16 @@ def plot_barline(
         )
 
         for i in range(len(df_line)):
-            plt.text(
+            t = plt.text(
                 x=df_line.index[i],
-                y=df_line[i],
-                s=y2labelfmt.format(float(df_line[i])),
+                y=df_line.values[i],
+                s=y2labelfmt.format(float(df_line.values[i])),
                 ha="center",
                 va="bottom",
-                size="small",
-                color="crimson",
+                fontsize=10,
+                color="white",
             )
+            t.set_bbox(dict(facecolor='crimson', alpha=0.7, edgecolor='crimson'))
 
         # 次坐标轴标签格式
         ax2.yaxis.set_major_formatter(FuncFormatter(lambda y, _: y2fmt.format(y)))

@@ -45,7 +45,7 @@ def prepare_data():
         if pd.isna(row["医院编码"])
         else (
             "无销量目标医院"
-            if pd.isna(row["MAT销量标准片数"]) or row["MAT销量标准片数"] == 0
+            if pd.isna(row["信立坦同期销量"]) or row["信立坦同期销量"] == 0
             else "有销量目标医院"
         ),
         axis=1,

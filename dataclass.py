@@ -1,5 +1,5 @@
 import collections
-from matplotlib.pyplot import xlabel
+from matplotlib.pyplot import title, xlabel
 import pandas as pd
 import numpy as np
 from pandas.core.reshape.pivot import pivot_table
@@ -127,10 +127,16 @@ class Potential(pd.DataFrame):
             y1fmt = "{:,.0f}"
             show_total = True
 
-        title = "%s%s%s不同%s%s" % (self.name, label_prefix, index, column, ylabel)
+        title = "%s%s%s%s%s" % (
+            self.name,
+            label_prefix,
+            index,
+            "" if column is None else "不同" + column,
+            ylabel,
+        )
         plot_barline(
             df,
-            savefile="%s%s.png" % (self.savepath, title),
+            savefile="%s%s柱状图.png" % (self.savepath, title.replace("\n", "")),
             xlabel_rotation=xlabel_rotation,
             y1fmt=y1fmt,
             y1labelfmt="{:,.0f}",
@@ -140,4 +146,107 @@ class Potential(pd.DataFrame):
             xtitle=xtitle,
             ytitle=ylabel,
             show_total=show_total,
+        )
+
+    def plot_share_pie(self, value, index, aggfunc, unit_index=None):
+        df = self.get_pivot(value=value, index=index, column=None, aggfunc=aggfunc)
+
+        """是否换单位"""
+        if unit_index == "百万":
+            df = df * 0.000001
+        elif unit_index == "万":
+            df = df * 0.0001
+        elif unit_index == "千":
+            df = df * 0.001
+
+        """根据统计方式不同判断y轴标签及y轴显示逾限"""
+        if aggfunc == len:
+            label = "终端数量"
+        elif aggfunc == sum:
+            label = "潜力DOT"
+
+        """如果换过单位在标签也要体现"""
+        if unit_index is not None:
+            label = "%s（%s）" % (label, unit_index)
+
+        title = "%s\n%s\n%s占比" % (
+            value,
+            index,
+            label,
+        )
+        plot_pie(
+            savefile="%s%s%s%s%s饼图.png" % (self.savepath, title.replace("\n", "")),
+            sizes=df[value].values,
+            labels=df.index,
+            title=title,
+        )
+
+    def plot_contrib_barline(
+        self,
+        value,
+        index,
+        aggfunc,
+        unit_index=None,
+        top=None,
+    ):
+        df = self.get_pivot(value=value, index=index, column=None, aggfunc=aggfunc)
+        df_bar = df / df.sum()
+        df_bar.columns = ["潜力贡献占比"]
+        df_line = df_bar.cumsum() # 累积贡献
+        df_line.columns = ["累积贡献占比"]
+
+        """是否换单位"""
+        if unit_index == "百万":
+            df = df * 0.000001
+        elif unit_index == "万":
+            df = df * 0.0001
+        elif unit_index == "千":
+            df = df * 0.001
+
+        """是否只取top项，如只取top一些文本标签会变化"""
+        label_prefix = "各"
+        xtitle = index
+        if top is not None:
+            df_bar = df_bar.iloc[:top, :]
+            df_line = df_line.iloc[:top, :]
+            label_prefix = "TOP" + str(top)
+            xtitle = label_prefix + index
+
+        """根据统计方式不同判断y轴标签及y轴显示逾限"""
+        if aggfunc == len:
+            ylabel = "终端数量"
+        elif aggfunc == sum:
+            ylabel = "潜力DOT"
+
+        """如果换过单位在标签也要体现"""
+        if unit_index is not None:
+            ylabel = "%s（%s）" % (ylabel, unit_index)
+
+        """根据不同index决定x轴标签是否旋转90度"""
+        if index == "潜力分位":
+            xlabel_rotation = 0
+        else:
+            xlabel_rotation = 90
+
+        title = "%s%s%s%s贡献及累积占比" % (
+            self.name,
+            label_prefix,
+            index,
+            ylabel,
+        )
+
+        plot_barline(
+            df_bar=df_bar,
+            df_line=df_line,
+            savefile="%s%s柱状图.png" % (self.savepath, title.replace("\n", "")),
+            xlabel_rotation=xlabel_rotation,
+            y1fmt="{:.0%}",
+            show_y1label=False,
+            y1labelfmt="{:.1%}",
+            y1labelthreshold=0,
+            title=title,
+            xtitle=xtitle,
+            ytitle=ylabel,
+            show_total=True,
+            total_fontsize=12,
         )

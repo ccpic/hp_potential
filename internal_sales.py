@@ -32,5 +32,5 @@ pivoted_target = pd.pivot_table(
 
 df_combined = pd.concat([pivoted_sales, pivoted_reps, pivoted_target], axis=1)
 df_combined.reset_index(level=0, inplace=True)
-df_combined.columns = ["医院编码", "MAT销量标准片数", "销售代表", "2021指标标准片数"]
+df_combined.columns = ["医院编码", "信立坦同期销量", "销售代表", "信立坦2021指标"]
 df_combined.to_csv("internal_sales.csv", encoding="utf-8-sig", index=False)

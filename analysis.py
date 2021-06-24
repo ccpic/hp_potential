@@ -10,11 +10,5 @@ pt_total = Potential(df, name="公立医院+社区医院")
 pt_hp = Potential(df[df["医院类型"] == "公立医院"], name="公立医院")
 pt_cm = Potential(df[df["医院类型"] == "社区医院"], name="社区医院")
 
-
-result = pt_total.get_pivot(value="终端潜力值", index="医院类型", column=None, aggfunc=sum)
-
-plot_pie(
-    savefile="test.png",
-    sizes=result["终端潜力值"].values,
-    labels=result.index,
-)
+pt_cm.plot_contrib_barline(value="终端潜力值", index="省份", aggfunc=sum)
+pt_cm.plot_contrib_barline(value="终端潜力值", index="城市", aggfunc=sum, top=30)
