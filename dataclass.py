@@ -12,6 +12,22 @@ D_SORTER = {
     "潜力分位": list(range(10, 0, -1)),
 }
 
+D_AGGFUNC = {
+    "终端潜力值": sum,
+    "信立坦同期销量": sum,
+    "信立坦2021指标": sum,
+    "医院名称": len,
+    "销售代表": lambda x: ",".join(x.astype(str)),
+}
+
+D_UNIT = {
+    "十亿": 1000000000,
+    "亿": 100000000,
+    "百万": 1000000,
+    "万": 10000,
+    "千": 1000,
+}
+
 
 class Potential(pd.DataFrame):
     @property
@@ -78,40 +94,47 @@ class Potential(pd.DataFrame):
         value,
         index,
         column,
-        aggfunc,
+        line_share=None,
         unit_index=None,
         top=None,
         percentage=False,
         y1labelthreshold=0.015,
     ):  # 潜力分位绘图
 
-        df = self.get_pivot(value, index, column, aggfunc)
+        aggfunc = D_AGGFUNC[value]
+        df_bar = self.get_pivot(value, index, column, aggfunc)
+
+        """添加指定列的share作为折线图数据"""
+        if line_share is not None:
+            df_line = df_bar[line_share].fillna(0) / df_bar.sum(axis=1)
+            df_line = df_line.to_frame()
+            df_line.columns = [line_share]
+        else:
+            df_line = None
 
         """是否换单位"""
-        if unit_index == "百万":
-            df = df * 0.000001
-        elif unit_index == "万":
-            df = df * 0.0001
-        elif unit_index == "千":
-            df = df * 0.001
+        if unit_index is not None:
+            df_bar = df_bar / D_UNIT[unit_index]
 
         """是否只取top项，如只取top一些文本标签会变化"""
         label_prefix = "各"
         xtitle = index
         if top is not None:
-            df = df.iloc[:top, :]
+            df_bar = df_bar.iloc[:top, :]
+            if df_line is not None:
+                df_line = df_line.iloc[:top, :]
             label_prefix = "TOP" + str(top)
             xtitle = label_prefix + index
 
         """根据统计方式不同判断y轴标签及y轴显示逾限"""
         if aggfunc == len:
-            ylabel = "终端数量"
+            ytitle = "终端数量"
         elif aggfunc == sum:
-            ylabel = "潜力DOT"
+            ytitle = "潜力DOT"
 
-        """如果换过单位在y轴标签也要体现"""
+        """如果换过单位在y轴标题也要体现"""
         if unit_index is not None:
-            ylabel = "%s（%s）" % (ylabel, unit_index)
+            ytitle = "%s（%s）" % (ytitle, unit_index)
 
         """根据不同index决定x轴标签是否旋转90度"""
         if index == "潜力分位":
@@ -127,15 +150,18 @@ class Potential(pd.DataFrame):
             y1fmt = "{:,.0f}"
             show_total = True
 
+        """图表标题"""
         title = "%s%s%s%s%s" % (
             self.name,
             label_prefix,
             index,
             "" if column is None else "不同" + column,
-            ylabel,
+            ytitle,
         )
+
         plot_barline(
-            df,
+            df_bar=df_bar,
+            df_line=df_line,
             savefile="%s%s柱状图.png" % (self.savepath, title.replace("\n", "")),
             xlabel_rotation=xlabel_rotation,
             y1fmt=y1fmt,
@@ -144,20 +170,17 @@ class Potential(pd.DataFrame):
             percentage=percentage,
             title=title,
             xtitle=xtitle,
-            ytitle=ylabel,
+            ytitle=ytitle,
             show_total=show_total,
         )
 
-    def plot_share_pie(self, value, index, aggfunc, unit_index=None):
+    def plot_share_pie(self, value, index, unit_index=None):
+        aggfunc = D_AGGFUNC[value]
         df = self.get_pivot(value=value, index=index, column=None, aggfunc=aggfunc)
 
         """是否换单位"""
-        if unit_index == "百万":
-            df = df * 0.000001
-        elif unit_index == "万":
-            df = df * 0.0001
-        elif unit_index == "千":
-            df = df * 0.001
+        if unit_index is not None:
+            df = df / D_UNIT[unit_index]
 
         """根据统计方式不同判断y轴标签及y轴显示逾限"""
         if aggfunc == len:
@@ -169,13 +192,14 @@ class Potential(pd.DataFrame):
         if unit_index is not None:
             label = "%s（%s）" % (label, unit_index)
 
+        """图表标题"""
         title = "%s\n%s\n%s占比" % (
             value,
             index,
             label,
         )
         plot_pie(
-            savefile="%s%s%s%s%s饼图.png" % (self.savepath, title.replace("\n", "")),
+            savefile="%s%s饼图.png" % (self.savepath, title.replace("\n", "")),
             sizes=df[value].values,
             labels=df.index,
             title=title,
@@ -185,23 +209,19 @@ class Potential(pd.DataFrame):
         self,
         value,
         index,
-        aggfunc,
         unit_index=None,
         top=None,
     ):
+        aggfunc = D_AGGFUNC[value]
         df = self.get_pivot(value=value, index=index, column=None, aggfunc=aggfunc)
         df_bar = df / df.sum()
         df_bar.columns = ["潜力贡献占比"]
-        df_line = df_bar.cumsum() # 累积贡献
+        df_line = df_bar.cumsum()  # 累积贡献
         df_line.columns = ["累积贡献占比"]
 
         """是否换单位"""
-        if unit_index == "百万":
-            df = df * 0.000001
-        elif unit_index == "万":
-            df = df * 0.0001
-        elif unit_index == "千":
-            df = df * 0.001
+        if unit_index is not None:
+            df = df / D_UNIT[unit_index]
 
         """是否只取top项，如只取top一些文本标签会变化"""
         label_prefix = "各"
@@ -214,13 +234,13 @@ class Potential(pd.DataFrame):
 
         """根据统计方式不同判断y轴标签及y轴显示逾限"""
         if aggfunc == len:
-            ylabel = "终端数量"
+            ytitle = "终端数量"
         elif aggfunc == sum:
-            ylabel = "潜力DOT"
+            ytitle = "潜力DOT"
 
         """如果换过单位在标签也要体现"""
         if unit_index is not None:
-            ylabel = "%s（%s）" % (ylabel, unit_index)
+            ytitle = "%s（%s）" % (ytitle, unit_index)
 
         """根据不同index决定x轴标签是否旋转90度"""
         if index == "潜力分位":
@@ -228,11 +248,12 @@ class Potential(pd.DataFrame):
         else:
             xlabel_rotation = 90
 
+        """图表标题"""
         title = "%s%s%s%s贡献及累积占比" % (
             self.name,
             label_prefix,
             index,
-            ylabel,
+            ytitle,
         )
 
         plot_barline(
@@ -246,7 +267,112 @@ class Potential(pd.DataFrame):
             y1labelthreshold=0,
             title=title,
             xtitle=xtitle,
-            ytitle=ylabel,
+            ytitle=ytitle,
             show_total=True,
             total_fontsize=12,
+        )
+
+    def plot_2d_bubble(
+        self,
+        value_x,
+        value_y,
+        index,
+        log_x=False,
+        log_y=False,
+        unit_index_x=None,
+        unit_index_y=None,
+        top=None,
+        with_reg=True,
+        z_scale=1,
+        fmt_x="{:,.0f}",
+        fmt_y="{:,.0f}",
+        label_limit=30,
+    ):
+        aggfunc1 = D_AGGFUNC[value_x]
+        df_x = self.get_pivot(
+            value=value_x,
+            index=index,
+            column=None,
+            aggfunc=aggfunc1,
+        )
+        """是否取对数"""
+        if log_x:
+            df_x = np.log(df_x)
+
+        """是否换单位"""
+        if unit_index_x is not None:
+            df_x = df_x / D_UNIT[unit_index_x]
+
+        aggfunc2 = D_AGGFUNC[value_y]
+        df_y = self.get_pivot(
+            value=value_y,
+            index=index,
+            column=None,
+            aggfunc=aggfunc2,
+        )
+
+        '''如果统计销售代表，一个lambda很难完成，需要进一步处理'''
+        if value_y == "销售代表":
+            value_y = "销售代表人数"
+            df_y[value_y] = df_y["销售代表"].apply(
+                lambda x: len(list(set([y for y in x.split(",") if str(y) != "nan"])))
+            ) # 将销售代表list换算成人数
+            df_y.drop("销售代表", axis=1, inplace=True)
+
+        """是否取对数"""
+        if log_y:
+            df_y = np.log(df_y)
+
+        """是否换单位"""
+        if unit_index_y is not None:
+            df_y = df_y / D_UNIT[unit_index_y]
+            
+        # print(df_x,df_y)
+        df_combined = pd.concat([df_x, df_y], axis=1)
+        df_combined.replace([np.inf, -np.inf, np.nan], 0 , inplace=True) # 所有异常值替换为0
+        
+        """是否只取top项，如只取top一些文本标签会变化"""
+        label_prefix = "各"
+        if top is not None:
+            df_combined = df_combined.iloc[:30, :]
+            label_prefix = "TOP" + str(top)
+
+        print(df_combined)
+        
+        """轴标题"""
+        xtitle = value_x
+        if unit_index_x is not None:
+            xtitle = "%s（%s）" % (xtitle, unit_index_x)
+        if log_x:
+            xtitle = "%s %s" % (xtitle, "取对数")
+        ytitle = value_y
+        if unit_index_y is not None:
+            ytitle = "%s（%s）" % (ytitle, unit_index_y)
+        if log_y:
+            ytitle = "%s %s" % (ytitle, "取对数")
+
+        """图表标题"""
+        title = "%s%s%s%s vs. %s" % (
+            self.name,
+            label_prefix,
+            index,
+            value_x,
+            value_y,
+        )
+        
+        '''绘图'''
+        plot_bubble(
+            savefile="%s%s气泡图.png" % (self.savepath, title.replace("\n", "")),
+            x=df_combined[value_x],
+            y=df_combined[value_y],
+            z=df_combined[value_x],
+            labels=df_combined.index,
+            title=title,
+            xtitle=xtitle,
+            ytitle=ytitle,
+            z_scale=z_scale,
+            xfmt=fmt_x,
+            yfmt=fmt_y,
+            label_limit=label_limit,
+            with_reg=with_reg,
         )

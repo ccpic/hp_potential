@@ -723,11 +723,8 @@ def plot_pie(savefile, sizes, labels, focus=None, title=""):
     # Save the figure
     save_plot(savefile)
 
-
 def plot_bubble(
     savefile,
-    width,
-    height,
     x,
     y,
     z,
@@ -735,6 +732,9 @@ def plot_bubble(
     title,
     xtitle,
     ytitle,
+    with_reg=False,
+    width=15,
+    height=6,
     z_scale=1,
     xfmt="{:.0%}",
     yfmt="{:+.0%}",
@@ -746,8 +746,8 @@ def plot_bubble(
     xlabel="",
     ylim=None,
     xlim=None,
-    showLabel=True,
-    labelLimit=15,
+    show_label=True,
+    label_limit=15,
 ):
 
     fig, ax = plt.subplots()
@@ -763,121 +763,9 @@ def plot_bubble(
 
     for i in range(len(x)):
         ax.scatter(
-            x[i],
-            y[i],
-            z[i] * z_scale,
-            color=next(colors),
-            alpha=0.6,
-            edgecolors="black",
-            zorder=5,
-        )
-    if yavgline == True:
-        ax.axhline(yavg, linestyle="--", linewidth=0.5, color="grey", zorder=1)
-    if xavgline == True:
-        ax.axvline(xavg, linestyle="--", linewidth=0.5, color="grey", zorder=1)
-    # ax.scatter(x, y, s=z, c=color, alpha=0.6, edgecolors="grey")
-    # ax.grid(which='major', linestyle=':', linewidth='0.5', color='black')
-
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda y, _: xfmt.format(y)))
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: yfmt.format(y)))
-
-    np.random.seed(0)
-    # for i, txt in enumerate(labels):
-    #     text = plt.text(x[i],y[i], txt+"\n"+ '('+ str("{:.1%}".format(x[i])) +', ' + str("{:.1%}".format(y[i])) + ')', ha='center', va='center')
-    if showLabel is True:
-        texts = [
-            plt.text(
-                x[i],
-                y[i],
-                labels[i],
-                ha="center",
-                va="center",
-                multialignment="center",
-                fontproperties=MYFONT,
-                fontsize=10,
-                zorder=10,
-            )
-            for i in range(len(labels[:labelLimit]))
-        ]
-        adjust_text(
-            texts, force_text=0.1, arrowprops=dict(arrowstyle="->", color="black")
-        )
-
-    if yavgline == True:
-        plt.text(
-            ax.get_xlim()[1],
-            yavg,
-            ylabel,
-            ha="left",
-            va="center",
-            color="grey",
-            multialignment="center",
-            fontproperties=MYFONT,
-            fontsize=10,
-        )
-    if xavgline == True:
-        plt.text(
-            xavg,
-            ax.get_ylim()[1],
-            xlabel,
-            ha="left",
-            va="top",
-            color="grey",
-            multialignment="center",
-            fontproperties=MYFONT,
-            fontsize=10,
-        )
-
-    plt.title(title, fontproperties=MYFONT)
-    plt.xlabel(xtitle, fontproperties=MYFONT, fontsize=12)
-    plt.ylabel(ytitle, fontproperties=MYFONT, fontsize=12)
-
-    # Save the figure
-    save_plot(savefile)
-
-
-def plot_bubble_with_reg(
-    savefile,
-    width,
-    height,
-    x,
-    y,
-    z,
-    labels,
-    title,
-    xtitle,
-    ytitle,
-    z_scale=1,
-    xfmt="{:.0%}",
-    yfmt="{:+.0%}",
-    yavgline=False,
-    yavg=None,
-    ylabel="",
-    xavgline=False,
-    xavg=None,
-    xlabel="",
-    ylim=None,
-    xlim=None,
-    showLabel=True,
-    labelLimit=15,
-):
-
-    fig, ax = plt.subplots()
-    fig.set_size_inches(width, height)
-
-    if ylim is not None:
-        ax.set_ylim(ymin=ylim[0], ymax=ylim[1])
-    if xlim is not None:
-        ax.set_xlim(xmin=xlim[0], xmax=xlim[1])
-
-    cmap = mpl.colors.ListedColormap(np.random.rand(256, 3))
-    colors = iter(cmap(np.linspace(0, 1, len(y))))
-
-    for i in range(len(x)):
-        ax.scatter(
-            x[i],
-            y[i],
-            z[i] * z_scale,
+            x.iloc[i],
+            y.iloc[i],
+            z.iloc[i] * z_scale,
             color=next(colors),
             alpha=0.6,
             edgecolors="black",
@@ -895,11 +783,11 @@ def plot_bubble_with_reg(
     np.random.seed(0)
     # for i, txt in enumerate(labels):
     #     text = plt.text(x[i],y[i], txt+"\n"+ '('+ str("{:.1%}".format(x[i])) +', ' + str("{:.1%}".format(y[i])) + ')', ha='center', va='center')
-    if showLabel is True:
+    if show_label is True:
         texts = [
             plt.text(
-                x[i],
-                y[i],
+                x.iloc[i],
+                y.iloc[i],
                 labels[i],
                 ha="center",
                 va="center",
@@ -907,7 +795,7 @@ def plot_bubble_with_reg(
                 fontproperties=MYFONT,
                 fontsize=10,
             )
-            for i in range(len(labels[:labelLimit]))
+            for i in range(len(labels[:label_limit]))
         ]
         adjust_text(
             texts, force_text=0.1, arrowprops=dict(arrowstyle="->", color="black")
@@ -938,46 +826,47 @@ def plot_bubble_with_reg(
             fontsize=10,
         )
 
-    n = y.size  # 观察例数
-    if n > 2:  # 数据点必须大于cov矩阵的scale
-        p, cov = np.polyfit(x, y, 1, cov=True)  # 简单线性回归返回parameter和covariance
-        poly1d_fn = np.poly1d(p)  # 拟合方程
-        y_model = poly1d_fn(x)  # 拟合的y值
-        m = p.size  # 参数个数
+    if with_reg:
+        n = y.size  # 观察例数
+        if n > 2:  # 数据点必须大于cov矩阵的scale
+            p, cov = np.polyfit(x, y, 1, cov=True)  # 简单线性回归返回parameter和covariance
+            poly1d_fn = np.poly1d(p)  # 拟合方程
+            y_model = poly1d_fn(x)  # 拟合的y值
+            m = p.size  # 参数个数
 
-        dof = n - m  # degrees of freedom
-        t = stats.t.ppf(0.975, dof)  # 显著性检验t值
+            dof = n - m  # degrees of freedom
+            t = stats.t.ppf(0.975, dof)  # 显著性检验t值
 
-        # 拟合结果绘图
-        ax.plot(x, y_model, "-", color="0.1", linewidth=1.5, alpha=0.5, label="Fit")
+            # 拟合结果绘图
+            ax.plot(x, y_model, "-", color="0.1", linewidth=1.5, alpha=0.5, label="Fit")
 
-        # 误差估计
-        resid = y - y_model  # 残差
-        s_err = np.sqrt(np.sum(resid ** 2) / dof)  # 标准误差
+            # 误差估计
+            resid = y - y_model  # 残差
+            s_err = np.sqrt(np.sum(resid ** 2) / dof)  # 标准误差
 
-        # 拟合CI和PI
-        x2 = np.linspace(np.min(x), np.max(x), 100)
-        y2 = poly1d_fn(x2)
+            # 拟合CI和PI
+            x2 = np.linspace(np.min(x), np.max(x), 100)
+            y2 = poly1d_fn(x2)
 
-        # CI计算和绘图
-        ci = (
-            t
-            * s_err
-            * np.sqrt(1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2))
-        )
-        ax.fill_between(x2, y2 + ci, y2 - ci, color="#b9cfe7", edgecolor="", alpha=0.5)
-
-        # Pi计算和绘图
-        pi = (
-            t
-            * s_err
-            * np.sqrt(
-                1 + 1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2)
+            # CI计算和绘图
+            ci = (
+                t
+                * s_err
+                * np.sqrt(1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2))
             )
-        )
-        ax.fill_between(x2, y2 + pi, y2 - pi, color="None", linestyle="--")
-        ax.plot(x2, y2 - pi, "--", color="0.5", label="95% Prediction Limits")
-        ax.plot(x2, y2 + pi, "--", color="0.5")
+            ax.fill_between(x2, y2 + ci, y2 - ci, color="#b9cfe7", alpha=0.5)
+
+            # Pi计算和绘图
+            pi = (
+                t
+                * s_err
+                * np.sqrt(
+                    1 + 1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2)
+                )
+            )
+            ax.fill_between(x2, y2 + pi, y2 - pi, color="None", linestyle="--")
+            ax.plot(x2, y2 - pi, "--", color="0.5", label="95% Prediction Limits")
+            ax.plot(x2, y2 + pi, "--", color="0.5")
 
     plt.title(title, fontproperties=MYFONT)
     plt.xlabel(xtitle, fontproperties=MYFONT, fontsize=12)
@@ -1291,12 +1180,14 @@ def plot_barline(
         else:
             label = df_line.name
 
+        color_line = "darkorange"
         ax2.plot(
             df_line.index,
             df_line.values,
             label=label,
-            color="crimson",
-            linewidth=2,
+            color=color_line,
+            linewidth=1,
+            linestyle='dashed',
             marker="o",
             markersize=3,
             markerfacecolor="white",
@@ -1312,7 +1203,7 @@ def plot_barline(
                 fontsize=10,
                 color="white",
             )
-            t.set_bbox(dict(facecolor='crimson', alpha=0.7, edgecolor='crimson'))
+            t.set_bbox(dict(facecolor=color_line, alpha=0.7, edgecolor=color_line))
 
         # 次坐标轴标签格式
         ax2.yaxis.set_major_formatter(FuncFormatter(lambda y, _: y2fmt.format(y)))
@@ -1320,6 +1211,7 @@ def plot_barline(
         # 合并图例
         bars, labels = ax.get_legend_handles_labels()
         lines, labels2 = ax2.get_legend_handles_labels()
+
         plt.legend(
             bars + lines, labels + labels2, loc="center left", bbox_to_anchor=(1.0, 0.5)
         )
