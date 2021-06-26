@@ -61,9 +61,9 @@ class Potential(pd.DataFrame):
         self.name = name
         self.savepath = savepath
 
-    def get_table(self, index):  # 综合表现表格
+    def get_table(self, index, top=None):  # 综合表现表格
 
-        """潜力部分"""
+        # 潜力部分
         pivoted_potential = pd.pivot_table(
             data=self,
             values="终端潜力值",
@@ -81,7 +81,7 @@ class Potential(pd.DataFrame):
         pivoted_potential["潜力贡献"] = (
             pivoted_potential["潜力(DOT)"] / pivoted_potential["潜力(DOT)"].sum()
         )
-        """覆盖部分"""
+        # 覆盖部分
         pivoted_access = pd.pivot_table(
             data=self,
             values="终端潜力值",
@@ -114,7 +114,7 @@ class Potential(pd.DataFrame):
             "有销量目标医院潜力(DOT)"
         ] / pivoted_access.sum(axis=1)
 
-        """内部销售部分"""
+        # 内部销售部分
         pivoted_sales = pd.pivot_table(
             data=self,
             values="信立坦同期销量",
@@ -130,7 +130,7 @@ class Potential(pd.DataFrame):
             pivoted_sales["信立坦同期销量(DOT)"] / pivoted_sales["信立坦同期销量(DOT)"].sum()
         )
 
-        """三部分合并"""
+        # 三部分合并
         df_combined = pd.concat(
             [pivoted_potential, pivoted_access, pivoted_sales], axis=1
         )
@@ -162,7 +162,11 @@ class Potential(pd.DataFrame):
             by=["潜力(DOT)"], ascending=False, inplace=True
         )  # 根据潜力由高到低排序
 
-        """计算合计，部分字段不能简单相加"""
+        # 只取top items，应该放在计算合计前
+        if top is not None:
+            df_combined = df_combined.iloc[:top, :]
+
+        # 计算合计，部分字段不能简单相加
         df_combined.loc["合计", :] = df_combined.sum(axis=0)
         df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"] = (
             df_combined.loc[df_combined.index != "合计", "潜力(DOT)"]
@@ -182,14 +186,121 @@ class Potential(pd.DataFrame):
             df_combined.loc["合计", "潜力(DOT)"] * df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"]
         )
 
+        df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
+
         return df_combined
 
-    def table_to_excel(self, index):
-        df = self.get_table(index)
+    def table_to_excel(self, index, top=None):
+        df = self.get_table(index, top=top)
 
-        writer = pd.ExcelWriter("test.xlsx", engine='xlsxwriter')
-        df.to_excel(writer, sheet_name='Sheet1')
-        writer.save()
+        # # Pandas导出
+        # df.to_excel(writer, sheet_name="data")
+
+        # 获取工作表对象
+        path = "%s%s%s潜力及销售表现表格.xlsx" % (self.savepath, self.name, index)
+        wbk = xlsxwriter.Workbook(path, {"nan_inf_to_errors": True})
+        sht = wbk.add_worksheet()
+
+        # 添加表格
+        sht.add_table(
+            first_row=0,
+            first_col=0,
+            last_row=df.shape[0],
+            last_col=df.shape[1],
+            options={
+                "data": [[i for i in row] for row in df.itertuples()],
+                "header_row": True,
+                "first_column": True,
+                "style": "Table Style Light 1",
+                "columns": [{"header": c} for c in df.reset_index().columns.tolist()],
+                "autofilter": 0,
+            },
+        )
+
+        # 添加格式
+        format_abs = wbk.add_format(
+            {
+                "num_format": "#,##0",
+                "font_name": "Arial",
+                "font_size": 10,
+            }
+        )
+        format_share = wbk.add_format(
+            {
+                "num_format": "0.0%",
+                "font_name": "Arial",
+                "font_size": 10,
+                "valign": "center",
+            }
+        )
+        format_total_row = wbk.add_format(
+            {
+                "font_name": "Arial",
+                "bold": True,
+                "font_color": "#FFFFFF",
+                "bg_color": "#000000",
+                "valign": "center",
+            }
+        )
+        format_thick_border = wbk.add_format({"border": 5})
+        # 应用格式到具体单元格
+        width_default = 12
+        width_wider = 20
+        sht.set_column(0, 0, width_default, format_abs)  # 索引列
+        sht.set_column(1, 1, width_default, format_abs)  # 终端数量
+        sht.set_column(2, 2, width_wider, format_abs)  # 潜力DOT
+        sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
+        sht.set_column(4, 4, width_default, format_abs)  # 信立坦目标终端数量
+        sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
+        sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
+        sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
+        sht.set_column(8, 8, width_wider, format_abs)  # 信立坦同期销量
+        sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
+
+        # sht.set_row(df.shape[0],None, format_total_row)
+
+        # 添加条件格式条形图
+        sht.conditional_format(  # 潜力贡献
+            first_row=1,
+            first_col=3,
+            last_row=df.shape[0] - 1,
+            last_col=3,
+            options={"type": "data_bar"},
+        )
+
+        sht.conditional_format(  # 信立坦目标覆盖潜力%
+            first_row=1,
+            first_col=5,
+            last_row=df.shape[0] - 1,
+            last_col=5,
+            options={"type": "data_bar", "bar_color": "#FFB628"},
+        )
+
+        sht.conditional_format(  # 信立坦目标销售覆盖潜力%
+            first_row=1,
+            first_col=7,
+            last_row=df.shape[0] - 1,
+            last_col=7,
+            options={"type": "data_bar", "bar_color": "#FFB628"},
+        )
+
+        sht.conditional_format(  # 信立坦贡献
+            first_row=1,
+            first_col=9,
+            last_row=df.shape[0] - 1,
+            last_col=9,
+            options={"type": "data_bar", "bar_color": "#63C384"},
+        )
+
+        sht.conditional_format(  # 最后三列份额
+            first_row=1,
+            first_col=10,
+            last_row=df.shape[0] - 1,
+            last_col=12,
+            options={"type": "data_bar", "bar_color": "#B1E1C1"},
+        )
+
+        wbk.close()
 
     def get_pivot(self, value, index, column, aggfunc):  # 透视表
         pivoted = pd.pivot_table(
@@ -239,7 +350,7 @@ class Potential(pd.DataFrame):
         aggfunc = D_AGGFUNC[value]
         df_bar = self.get_pivot(value, index, column, aggfunc)
 
-        """添加指定列的share作为折线图数据"""
+        # 添加指定列的share作为折线图数据
         if line_share is not None:
             df_line = df_bar[line_share].fillna(0) / df_bar.sum(axis=1)
             df_line = df_line.to_frame()
@@ -247,11 +358,11 @@ class Potential(pd.DataFrame):
         else:
             df_line = None
 
-        """是否换单位"""
+        # 是否换单位
         if unit_index is not None:
             df_bar = df_bar / D_UNIT[unit_index]
 
-        """是否只取top项，如只取top一些文本标签会变化"""
+        # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
         xtitle = index
         if top is not None:
@@ -261,23 +372,23 @@ class Potential(pd.DataFrame):
             label_prefix = "TOP" + str(top)
             xtitle = label_prefix + index
 
-        """根据统计方式不同判断y轴标签及y轴显示逾限"""
+        # 根据统计方式不同判断y轴标签及y轴显示逾限
         if aggfunc == len:
             ytitle = "终端数量"
         elif aggfunc == sum:
             ytitle = "潜力DOT"
 
-        """如果换过单位在y轴标题也要体现"""
+        # 如果换过单位在y轴标题也要体现
         if unit_index is not None:
             ytitle = "%s（%s）" % (ytitle, unit_index)
 
-        """根据不同index决定x轴标签是否旋转90度"""
+        # 根据不同index决定x轴标签是否旋转90度
         if index == "潜力分位":
             xlabel_rotation = 0
         else:
             xlabel_rotation = 90
 
-        """是否显示y轴值标签"""
+        # 是否显示y轴值标签
         if percentage:
             y1fmt = ""
             show_total = False
@@ -285,7 +396,7 @@ class Potential(pd.DataFrame):
             y1fmt = "{:,.0f}"
             show_total = True
 
-        """图表标题"""
+        # 图表标题
         title = "%s%s%s%s%s" % (
             self.name,
             label_prefix,
@@ -313,17 +424,17 @@ class Potential(pd.DataFrame):
         aggfunc = D_AGGFUNC[value]
         df = self.get_pivot(value=value, index=index, column=None, aggfunc=aggfunc)
 
-        """是否换单位"""
+        # 是否换单位
         if unit_index is not None:
             df = df / D_UNIT[unit_index]
 
-        """根据统计方式不同判断y轴标签及y轴显示逾限"""
+        # 根据统计方式不同判断y轴标签及y轴显示逾限
         if aggfunc == len:
             label = "终端数量占比"
         elif aggfunc == sum:
             label = "%s占比" % value
 
-        """图表标题"""
+        # 图表标题
         title = "%s\n不同%s\n%s" % (
             self.name,
             index,
@@ -350,11 +461,11 @@ class Potential(pd.DataFrame):
         df_line = df_bar.cumsum()  # 累积贡献
         df_line.columns = ["累积贡献占比"]
 
-        """是否换单位"""
+        # 是否换单位
         if unit_index is not None:
             df = df / D_UNIT[unit_index]
 
-        """是否只取top项，如只取top一些文本标签会变化"""
+        # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
         xtitle = index
         if top is not None:
@@ -363,23 +474,23 @@ class Potential(pd.DataFrame):
             label_prefix = "TOP" + str(top)
             xtitle = label_prefix + index
 
-        """根据统计方式不同判断y轴标签及y轴显示逾限"""
+        # 根据统计方式不同判断y轴标签及y轴显示逾限
         if aggfunc == len:
             ytitle = "终端数量"
         elif aggfunc == sum:
             ytitle = "潜力DOT"
 
-        """如果换过单位在标签也要体现"""
+        # 如果换过单位在标签也要体现
         if unit_index is not None:
             ytitle = "%s（%s）" % (ytitle, unit_index)
 
-        """根据不同index决定x轴标签是否旋转90度"""
+        # 根据不同index决定x轴标签是否旋转90度
         if index == "潜力分位":
             xlabel_rotation = 0
         else:
             xlabel_rotation = 90
 
-        """图表标题"""
+        # 图表标题
         title = "%s%s%s%s贡献及累积占比" % (
             self.name,
             label_prefix,
@@ -426,11 +537,11 @@ class Potential(pd.DataFrame):
             column=None,
             aggfunc=aggfunc1,
         )
-        """是否取对数"""
+        # 是否取对数
         if log_x:
             df_x = np.log(df_x)
 
-        """是否换单位"""
+        # 是否换单位
         if unit_index_x is not None:
             df_x = df_x / D_UNIT[unit_index_x]
 
@@ -442,7 +553,7 @@ class Potential(pd.DataFrame):
             aggfunc=aggfunc2,
         )
 
-        """如果统计销售代表，一个lambda很难完成，需要进一步处理"""
+        # 如果统计销售代表，一个lambda很难完成，需要进一步处理
         if value_y == "销售代表":
             value_y = "销售代表人数"
             df_y[value_y] = df_y["销售代表"].apply(
@@ -450,19 +561,19 @@ class Potential(pd.DataFrame):
             )  # 将销售代表list换算成人数
             df_y.drop("销售代表", axis=1, inplace=True)
 
-        """是否取对数"""
+        # 是否取对数
         if log_y:
             df_y = np.log(df_y)
 
-        """是否换单位"""
+        # 是否换单位
         if unit_index_y is not None:
             df_y = df_y / D_UNIT[unit_index_y]
 
         # print(df_x,df_y)
         df_combined = pd.concat([df_x, df_y], axis=1)
-        # df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
+        df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
 
-        """是否只取top项，如只取top一些文本标签会变化"""
+        # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
         if top is not None:
             df_combined = df_combined.iloc[:30, :]
@@ -470,7 +581,7 @@ class Potential(pd.DataFrame):
 
         print(df_combined)
 
-        """轴标题"""
+        # 轴标题
         xtitle = value_x
         if unit_index_x is not None:
             xtitle = "%s（%s）" % (xtitle, unit_index_x)
@@ -482,7 +593,7 @@ class Potential(pd.DataFrame):
         if log_y:
             ytitle = "%s %s" % (ytitle, "取对数")
 
-        """图表标题"""
+        # 图表标题
         title = "%s%s%s%s vs. %s" % (
             self.name,
             label_prefix,
@@ -491,7 +602,7 @@ class Potential(pd.DataFrame):
             value_y,
         )
 
-        """绘图"""
+        # 绘图
         plot_bubble(
             savefile="%s%s气泡图.png" % (self.savepath, title.replace("\n", "")),
             x=df_combined[value_x],

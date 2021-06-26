@@ -19,4 +19,4 @@ mask = (df["医院类型"] == "社区医院") & (df["销售状态"] == "有销�
 pt_cm_hassale = Potential(df.loc[mask, :], name="社区有销量目标医院")
 
 
-pt_hp.table_to_excel("潜力分位")
+pt_cm.table_to_excel("省份")
