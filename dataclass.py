@@ -10,12 +10,20 @@ D_SORTER = {
     "销售状态": ["有销量目标医院", "无销量目标医院", "非目标医院"],
     "医院类型": ["公立医院", "社区医院"],
     "潜力分位": list(range(10, 0, -1)),
+    "信立坦销售表现": [
+        "信立坦份额>10%",
+        "信立坦份额5%-10%",
+        "信立坦份额1%-5%",
+        "信立坦份额<1%",
+        "未开户或非目标",
+    ],
 }
 
 D_AGGFUNC = {
     "终端潜力值": sum,
     "信立坦同期销量": sum,
     "信立坦2021指标": sum,
+    "信立坦销售份额": np.mean,
     "医院名称": len,
     "销售代表": lambda x: ",".join(x.astype(str)),
 }
@@ -27,6 +35,8 @@ D_UNIT = {
     "万": 10000,
     "千": 1000,
 }
+
+D_LABEL = {"医院名称": "医院"}
 
 
 class Potential(pd.DataFrame):
@@ -62,133 +72,187 @@ class Potential(pd.DataFrame):
         self.savepath = savepath
 
     def get_table(self, index, top=None):  # 综合表现表格
+        if index == "医院名称":  # 出单家医院数据，无需透视
+            df = self.loc[
+                :, ["医院名称", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦同期销量", "信立坦销售份额"]
+            ]
 
-        # 潜力部分
-        pivoted_potential = pd.pivot_table(
-            data=self,
-            values="终端潜力值",
-            index=index,
-            columns=None,
-            aggfunc=[len, sum],
-            fill_value=0,
-        )
-        pivoted_potential = pd.DataFrame(
-            pivoted_potential.to_records()
-        )  # pivot table对象转为默认df
-        pivoted_potential.set_index(index, inplace=True)
-        # pivoted_potential.reset_index(axis=1, inplace=True)
-        pivoted_potential.columns = ["终端数量", "潜力(DOT)"]
-        pivoted_potential["潜力贡献"] = (
-            pivoted_potential["潜力(DOT)"] / pivoted_potential["潜力(DOT)"].sum()
-        )
-        # 覆盖部分
-        pivoted_access = pd.pivot_table(
-            data=self,
-            values="终端潜力值",
-            index=index,
-            columns="销售状态",
-            aggfunc=[len, sum],
-            fill_value=0,
-        )
-        pivoted_access = pd.DataFrame(
-            pivoted_access.to_records()
-        )  # pivot table对象转为默认df
-        pivoted_access.set_index(index, inplace=True)
-        # pivoted_access.reset_index(axis=1, inplace=True)
-        pivoted_access.columns = [
-            "无销量目标医院终端数量",
-            "有销量目标医院终端数量",
-            "非目标医院终端数量",
-            "无销量目标医院潜力(DOT)",
-            "有销量目标医院潜力(DOT)",
-            "非目标医院潜力(DOT)",
-        ]
-        pivoted_access["信立坦目标覆盖终端数量"] = (
-            pivoted_access["无销量目标医院终端数量"] + pivoted_access["有销量目标医院终端数量"]
-        )
-        pivoted_access["信立坦目标覆盖潜力(DOT %)"] = 1 - pivoted_access[
-            "非目标医院潜力(DOT)"
-        ] / pivoted_access.sum(axis=1)
-        pivoted_access["信立坦销售覆盖终端数量"] = pivoted_access["有销量目标医院终端数量"]
-        pivoted_access["信立坦销售覆盖潜力(DOT %)"] = pivoted_access[
-            "有销量目标医院潜力(DOT)"
-        ] / pivoted_access.sum(axis=1)
+            df.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
 
-        # 内部销售部分
-        pivoted_sales = pd.pivot_table(
-            data=self,
-            values="信立坦同期销量",
-            index=index,
-            columns=None,
-            aggfunc=sum,
-            fill_value=0,
-        )
-        pivoted_sales = pd.DataFrame(pivoted_sales.to_records())  # pivot table对象转为默认df
-        pivoted_sales.set_index(index, inplace=True)
-        pivoted_sales.columns = ["信立坦同期销量(DOT)"]
-        pivoted_sales["信立坦销售贡献"] = (
-            pivoted_sales["信立坦同期销量(DOT)"] / pivoted_sales["信立坦同期销量(DOT)"].sum()
-        )
+            df["潜力贡献"] = df["终端潜力值"] / df["终端潜力值"].sum()
+            df["信立坦销售贡献"] = df["信立坦同期销量"] / df["信立坦同期销量"].sum()
 
-        # 三部分合并
-        df_combined = pd.concat(
-            [pivoted_potential, pivoted_access, pivoted_sales], axis=1
-        )
-        df_combined["信立坦所有终端份额"] = df_combined["信立坦同期销量(DOT)"] / df_combined["潜力(DOT)"]
-        df_combined["信立坦目标终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
-            df_combined["潜力(DOT)"] * df_combined["信立坦目标覆盖潜力(DOT %)"]
-        )
-        df_combined["信立坦销售终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
-            df_combined["潜力(DOT)"] * df_combined["信立坦销售覆盖潜力(DOT %)"]
-        )
-        df_combined = df_combined.reindex(
-            [
-                "终端数量",
-                "潜力(DOT)",
+            df = df.reindex(
+                [
+                    "医院名称",
+                    "省份",
+                    "城市",
+                    "潜力分位",
+                    "终端潜力值",
+                    "潜力贡献",
+                    "销售状态",
+                    "信立坦同期销量",
+                    "信立坦销售贡献",
+                    "信立坦销售份额",
+                ],
+                axis=1,
+            )
+            df.columns = [
+                "终端名称",
+                "省份",
+                "城市",
+                "潜力分位",
+                "潜力值(DOT)",
                 "潜力贡献",
-                "信立坦目标覆盖终端数量",
-                "信立坦目标覆盖潜力(DOT %)",
-                "信立坦销售覆盖终端数量",
-                "信立坦销售覆盖潜力(DOT %)",
+                "销售状态",
                 "信立坦同期销量(DOT)",
                 "信立坦销售贡献",
-                "信立坦所有终端份额",
-                "信立坦目标终端份额",
-                "信立坦销售终端份额",
-            ],
-            axis="columns",
-        )
-        df_combined.sort_values(
-            by=["潜力(DOT)"], ascending=False, inplace=True
-        )  # 根据潜力由高到低排序
+                "信立坦销售份额",
+            ]
+            df.set_index("终端名称", inplace=True)
 
-        # 只取top items，应该放在计算合计前
-        if top is not None:
-            df_combined = df_combined.iloc[:top, :]
+            # 只取top items，应该放在计算合计前
+            if top is not None:
+                df = df.iloc[:top, :]
 
-        # 计算合计，部分字段不能简单相加
-        df_combined.loc["合计", :] = df_combined.sum(axis=0)
-        df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"] = (
-            df_combined.loc[df_combined.index != "合计", "潜力(DOT)"]
-            * df_combined.loc[df_combined.index != "合计", "信立坦目标覆盖潜力(DOT %)"]
-        ).sum() / df_combined.loc["合计", "潜力(DOT)"]
-        df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"] = (
-            df_combined.loc[df_combined.index != "合计", "潜力(DOT)"]
-            * df_combined.loc[df_combined.index != "合计", "信立坦销售覆盖潜力(DOT %)"]
-        ).sum() / df_combined.loc["合计", "潜力(DOT)"]
-        df_combined.loc["合计", "信立坦所有终端份额"] = (
-            df_combined.loc["合计", "信立坦同期销量(DOT)"] / df_combined.loc["合计", "潜力(DOT)"]
-        )
-        df_combined.loc["合计", "信立坦目标终端份额"] = df_combined.loc["合计", "信立坦同期销量(DOT)"] / (
-            df_combined.loc["合计", "潜力(DOT)"] * df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"]
-        )
-        df_combined.loc["合计", "信立坦销售终端份额"] = df_combined.loc["合计", "信立坦同期销量(DOT)"] / (
-            df_combined.loc["合计", "潜力(DOT)"] * df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"]
-        )
+            return df
+        else:
+            # 潜力部分
+            pivoted_potential = pd.pivot_table(
+                data=self,
+                values="终端潜力值",
+                index=index,
+                columns=None,
+                aggfunc=[len, sum],
+                fill_value=0,
+            )
+            pivoted_potential = pd.DataFrame(
+                pivoted_potential.to_records()
+            )  # pivot table对象转为默认df
+            pivoted_potential.set_index(index, inplace=True)
+            # pivoted_potential.reset_index(axis=1, inplace=True)
+            pivoted_potential.columns = ["终端数量", "潜力(DOT)"]
+            pivoted_potential["潜力贡献"] = (
+                pivoted_potential["潜力(DOT)"] / pivoted_potential["潜力(DOT)"].sum()
+            )
+            # 覆盖部分
+            pivoted_access = pd.pivot_table(
+                data=self,
+                values="终端潜力值",
+                index=index,
+                columns="销售状态",
+                aggfunc=[len, sum],
+                fill_value=0,
+            )
+            pivoted_access = pd.DataFrame(
+                pivoted_access.to_records()
+            )  # pivot table对象转为默认df
+            pivoted_access.set_index(index, inplace=True)
+            # pivoted_access.reset_index(axis=1, inplace=True)
+            pivoted_access.columns = [
+                "无销量目标医院终端数量",
+                "有销量目标医院终端数量",
+                "非目标医院终端数量",
+                "无销量目标医院潜力(DOT)",
+                "有销量目标医院潜力(DOT)",
+                "非目标医院潜力(DOT)",
+            ]
+            pivoted_access["信立坦目标覆盖终端数量"] = (
+                pivoted_access["无销量目标医院终端数量"] + pivoted_access["有销量目标医院终端数量"]
+            )
+            pivoted_access["信立坦目标覆盖潜力(DOT %)"] = 1 - pivoted_access[
+                "非目标医院潜力(DOT)"
+            ] / pivoted_access.sum(axis=1)
+            pivoted_access["信立坦销售覆盖终端数量"] = pivoted_access["有销量目标医院终端数量"]
+            pivoted_access["信立坦销售覆盖潜力(DOT %)"] = pivoted_access[
+                "有销量目标医院潜力(DOT)"
+            ] / pivoted_access.sum(axis=1)
 
-        df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
+            # 内部销售部分
+            pivoted_sales = pd.pivot_table(
+                data=self,
+                values="信立坦同期销量",
+                index=index,
+                columns=None,
+                aggfunc=sum,
+                fill_value=0,
+            )
+            pivoted_sales = pd.DataFrame(
+                pivoted_sales.to_records()
+            )  # pivot table对象转为默认df
+            pivoted_sales.set_index(index, inplace=True)
+            pivoted_sales.columns = ["信立坦同期销量(DOT)"]
+            pivoted_sales["信立坦销售贡献"] = (
+                pivoted_sales["信立坦同期销量(DOT)"] / pivoted_sales["信立坦同期销量(DOT)"].sum()
+            )
 
-        return df_combined
+            # 三部分合并
+            df_combined = pd.concat(
+                [pivoted_potential, pivoted_access, pivoted_sales], axis=1
+            )
+            df_combined["信立坦所有终端份额"] = (
+                df_combined["信立坦同期销量(DOT)"] / df_combined["潜力(DOT)"]
+            )
+            df_combined["信立坦目标终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
+                df_combined["潜力(DOT)"] * df_combined["信立坦目标覆盖潜力(DOT %)"]
+            )
+            df_combined["信立坦销售终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
+                df_combined["潜力(DOT)"] * df_combined["信立坦销售覆盖潜力(DOT %)"]
+            )
+            df_combined = df_combined.reindex(
+                [
+                    "终端数量",
+                    "潜力(DOT)",
+                    "潜力贡献",
+                    "信立坦目标覆盖终端数量",
+                    "信立坦目标覆盖潜力(DOT %)",
+                    "信立坦销售覆盖终端数量",
+                    "信立坦销售覆盖潜力(DOT %)",
+                    "信立坦同期销量(DOT)",
+                    "信立坦销售贡献",
+                    "信立坦所有终端份额",
+                    "信立坦目标终端份额",
+                    "信立坦销售终端份额",
+                ],
+                axis="columns",
+            )
+            df_combined.sort_values(
+                by=["潜力(DOT)"], ascending=False, inplace=True
+            )  # 根据潜力由高到低排序
+
+            # 只取top items，应该放在计算合计前
+            if top is not None:
+                df_combined = df_combined.iloc[:top, :]
+
+            # 计算合计，部分字段不能简单相加
+            df_combined.loc["合计", :] = df_combined.sum(axis=0)
+            df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"] = (
+                df_combined.loc[df_combined.index != "合计", "潜力(DOT)"]
+                * df_combined.loc[df_combined.index != "合计", "信立坦目标覆盖潜力(DOT %)"]
+            ).sum() / df_combined.loc["合计", "潜力(DOT)"]
+            df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"] = (
+                df_combined.loc[df_combined.index != "合计", "潜力(DOT)"]
+                * df_combined.loc[df_combined.index != "合计", "信立坦销售覆盖潜力(DOT %)"]
+            ).sum() / df_combined.loc["合计", "潜力(DOT)"]
+            df_combined.loc["合计", "信立坦所有终端份额"] = (
+                df_combined.loc["合计", "信立坦同期销量(DOT)"] / df_combined.loc["合计", "潜力(DOT)"]
+            )
+            df_combined.loc["合计", "信立坦目标终端份额"] = df_combined.loc[
+                "合计", "信立坦同期销量(DOT)"
+            ] / (
+                df_combined.loc["合计", "潜力(DOT)"]
+                * df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"]
+            )
+            df_combined.loc["合计", "信立坦销售终端份额"] = df_combined.loc[
+                "合计", "信立坦同期销量(DOT)"
+            ] / (
+                df_combined.loc["合计", "潜力(DOT)"]
+                * df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"]
+            )
+
+            df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
+
+            return df_combined
 
     def table_to_excel(self, index, top=None):
         df = self.get_table(index, top=top)
@@ -246,59 +310,92 @@ class Potential(pd.DataFrame):
         # 应用格式到具体单元格
         width_default = 12
         width_wider = 20
-        sht.set_column(0, 0, width_default, format_abs)  # 索引列
-        sht.set_column(1, 1, width_default, format_abs)  # 终端数量
-        sht.set_column(2, 2, width_wider, format_abs)  # 潜力DOT
-        sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
-        sht.set_column(4, 4, width_default, format_abs)  # 信立坦目标终端数量
-        sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
-        sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
-        sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
-        sht.set_column(8, 8, width_wider, format_abs)  # 信立坦同期销量
-        sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
+        if index == "医院名称":
+            sht.set_column(0, 0, 38, format_abs)  # 索引项
+            sht.set_column(1, 3, 8, format_abs)  #省/市/潜力分位
+            sht.set_column(4, 4, width_wider, format_abs)  # 终端潜力
+            sht.set_column(5, 6, width_default, format_share)  # 潜力贡献/销售状态
+            sht.set_column(7, 7, width_default, format_abs)  # 信立坦销售
+            sht.set_column(8, 9, width_default, format_share)  # 信立坦销售量/销售份额
+            
+            # 添加条件格式条形图
+            sht.conditional_format(  # 潜力贡献
+                first_row=1,
+                first_col=5,
+                last_row=df.shape[0] - 1,
+                last_col=5,
+                options={"type": "data_bar"},
+            )
+            
+            sht.conditional_format(  # 信立坦销售贡献
+                first_row=1,
+                first_col=8,
+                last_row=df.shape[0] - 1,
+                last_col=8,
+                options={"type": "data_bar", "bar_color": "#D0B5FD"},
+            )
+            
+            sht.conditional_format(  # 信立坦份额
+                first_row=1,
+                first_col=9,
+                last_row=df.shape[0] - 1,
+                last_col=9,
+                options={"type": "data_bar", "bar_color": "#B1E1C1"},
+            )
+        else:
+            sht.set_column(0, 0, width_default, format_abs)  # 索引列
+            sht.set_column(1, 1, width_default, format_abs)  # 终端数量
+            sht.set_column(2, 2, width_wider, format_abs)  # 潜力DOT
+            sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
+            sht.set_column(4, 4, width_default, format_abs)  # 信立坦目标终端数量
+            sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
+            sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
+            sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
+            sht.set_column(8, 8, width_wider, format_abs)  # 信立坦同期销量
+            sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
 
-        # sht.set_row(df.shape[0],None, format_total_row)
+            # sht.set_row(df.shape[0],None, format_total_row)
 
-        # 添加条件格式条形图
-        sht.conditional_format(  # 潜力贡献
-            first_row=1,
-            first_col=3,
-            last_row=df.shape[0] - 1,
-            last_col=3,
-            options={"type": "data_bar"},
-        )
+            # 添加条件格式条形图
+            sht.conditional_format(  # 潜力贡献
+                first_row=1,
+                first_col=3,
+                last_row=df.shape[0] - 1,
+                last_col=3,
+                options={"type": "data_bar"},
+            )
 
-        sht.conditional_format(  # 信立坦目标覆盖潜力%
-            first_row=1,
-            first_col=5,
-            last_row=df.shape[0] - 1,
-            last_col=5,
-            options={"type": "data_bar", "bar_color": "#FFB628"},
-        )
+            sht.conditional_format(  # 信立坦目标覆盖潜力%
+                first_row=1,
+                first_col=5,
+                last_row=df.shape[0] - 1,
+                last_col=5,
+                options={"type": "data_bar", "bar_color": "#FFB628"},
+            )
 
-        sht.conditional_format(  # 信立坦目标销售覆盖潜力%
-            first_row=1,
-            first_col=7,
-            last_row=df.shape[0] - 1,
-            last_col=7,
-            options={"type": "data_bar", "bar_color": "#FFB628"},
-        )
+            sht.conditional_format(  # 信立坦目标销售覆盖潜力%
+                first_row=1,
+                first_col=7,
+                last_row=df.shape[0] - 1,
+                last_col=7,
+                options={"type": "data_bar", "bar_color": "#FFB628"},
+            )
 
-        sht.conditional_format(  # 信立坦贡献
-            first_row=1,
-            first_col=9,
-            last_row=df.shape[0] - 1,
-            last_col=9,
-            options={"type": "data_bar", "bar_color": "#63C384"},
-        )
+            sht.conditional_format(  # 信立坦贡献
+                first_row=1,
+                first_col=9,
+                last_row=df.shape[0] - 1,
+                last_col=9,
+                options={"type": "data_bar", "bar_color": "#D0B5FD"},
+            )
 
-        sht.conditional_format(  # 最后三列份额
-            first_row=1,
-            first_col=10,
-            last_row=df.shape[0] - 1,
-            last_col=12,
-            options={"type": "data_bar", "bar_color": "#B1E1C1"},
-        )
+            sht.conditional_format(  # 最后三列份额
+                first_row=1,
+                first_col=10,
+                last_row=df.shape[0] - 1,
+                last_col=12,
+                options={"type": "data_bar", "bar_color": "#B1E1C1"},
+            )
 
         wbk.close()
 
@@ -344,6 +441,7 @@ class Potential(pd.DataFrame):
         unit_index=None,
         top=None,
         percentage=False,
+        percentage_label=False,
         y1labelthreshold=0.015,
     ):  # 潜力分位绘图
 
@@ -364,13 +462,13 @@ class Potential(pd.DataFrame):
 
         # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
-        xtitle = index
+        xtitle = D_LABEL.get(index, index)
         if top is not None:
             df_bar = df_bar.iloc[:top, :]
             if df_line is not None:
                 df_line = df_line.iloc[:top, :]
             label_prefix = "TOP" + str(top)
-            xtitle = label_prefix + index
+            xtitle = label_prefix + D_LABEL.get(index, index)
 
         # 根据统计方式不同判断y轴标签及y轴显示逾限
         if aggfunc == len:
@@ -396,11 +494,16 @@ class Potential(pd.DataFrame):
             y1fmt = "{:,.0f}"
             show_total = True
 
+        if percentage_label:
+            y1labelfmt = "{:.0%}"
+        else:
+            y1labelfmt = "{:,.0f}"
+
         # 图表标题
         title = "%s%s%s%s%s" % (
             self.name,
             label_prefix,
-            index,
+            D_LABEL.get(index, index),
             "" if column is None else "不同" + column,
             ytitle,
         )
@@ -411,9 +514,10 @@ class Potential(pd.DataFrame):
             savefile="%s%s柱状图.png" % (self.savepath, title.replace("\n", "")),
             xlabel_rotation=xlabel_rotation,
             y1fmt=y1fmt,
-            y1labelfmt="{:,.0f}",
+            y1labelfmt=y1labelfmt,
             y1labelthreshold=y1labelthreshold,
             percentage=percentage,
+            percentage_label=percentage_label,
             title=title,
             xtitle=xtitle,
             ytitle=ytitle,
@@ -597,7 +701,7 @@ class Potential(pd.DataFrame):
         title = "%s%s%s%s vs. %s" % (
             self.name,
             label_prefix,
-            index,
+            D_LABEL.get(index, index),
             value_x,
             value_y,
         )

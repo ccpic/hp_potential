@@ -8,6 +8,21 @@ pd.set_option("display.max_columns", 5000)
 pd.set_option("display.width", 5000)
 
 
+def share_cond(share):
+    if share < 0.01:
+        condition = "信立坦份额<1%"
+    elif share < 0.05:
+        condition = "信立坦份额1%-5%"
+    elif share < 0.1:
+        condition = "信立坦份额5%-10%"
+    elif share >= 0.1:
+        condition = "信立坦份额>10%"
+    else:
+        condition = "未开户或非目标"
+        
+    return condition
+
+
 def prepare_data():
     # 导入公立医院终端潜力数据
     df_hp = pd.read_excel(open("潜力数据.xlsx", "rb"), sheet_name="医院潜力")  # 从Excel读取大医院潜力数据
@@ -49,6 +64,10 @@ def prepare_data():
         axis=1,
     )
     # 根据是否有医院编码以及是否有销量标记终端销售状态
+
+    # 计算终端信立坦销售份额
+    df_combined["信立坦销售份额"] = df_combined["信立坦同期销量"] / df_combined["终端潜力值"]
+    df_combined["信立坦销售表现"] = df_combined["信立坦销售份额"].apply(lambda x: share_cond(x))
 
     # 计算潜力分位
     df_combined.sort_values(by=["终端潜力值"], inplace=True)
