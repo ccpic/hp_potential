@@ -21,4 +21,8 @@ pt_cm_hassale = Potential(df.loc[mask, :], name="有量社区医院")
 mask = (df["医院类型"] == "社区医院") & (df["省份"] == "北京")
 pt_cm_bj = Potential(df.loc[mask, :], name="北京社区医院", savepath="./plots/北京/")
 
-pt_cm_hassale.table_to_excel(index="医院名称", top=30)
+# pt_cm_hassale.plot_pivot_stackedbar(
+#     value="医院名称", index="潜力分位", column="信立坦销售表现", 
+# )
+
+pt_cm.plot_share_pie(value="终端潜力值", index="销售状态", unit_index="百万")

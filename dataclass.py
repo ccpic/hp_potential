@@ -116,7 +116,7 @@ class Potential(pd.DataFrame):
                 df = df.iloc[:top, :]
 
             return df
-        else:
+        else:  # 其他表头需要透视
             # 潜力部分
             pivoted_potential = pd.pivot_table(
                 data=self,
@@ -312,12 +312,12 @@ class Potential(pd.DataFrame):
         width_wider = 20
         if index == "医院名称":
             sht.set_column(0, 0, 38, format_abs)  # 索引项
-            sht.set_column(1, 3, 8, format_abs)  #省/市/潜力分位
+            sht.set_column(1, 3, 8, format_abs)  # 省/市/潜力分位
             sht.set_column(4, 4, width_wider, format_abs)  # 终端潜力
             sht.set_column(5, 6, width_default, format_share)  # 潜力贡献/销售状态
             sht.set_column(7, 7, width_default, format_abs)  # 信立坦销售
             sht.set_column(8, 9, width_default, format_share)  # 信立坦销售量/销售份额
-            
+
             # 添加条件格式条形图
             sht.conditional_format(  # 潜力贡献
                 first_row=1,
@@ -326,7 +326,7 @@ class Potential(pd.DataFrame):
                 last_col=5,
                 options={"type": "data_bar"},
             )
-            
+
             sht.conditional_format(  # 信立坦销售贡献
                 first_row=1,
                 first_col=8,
@@ -334,7 +334,7 @@ class Potential(pd.DataFrame):
                 last_col=8,
                 options={"type": "data_bar", "bar_color": "#D0B5FD"},
             )
-            
+
             sht.conditional_format(  # 信立坦份额
                 first_row=1,
                 first_col=9,
@@ -418,13 +418,17 @@ class Potential(pd.DataFrame):
 
         if index in D_SORTER:
             try:
-                pivoted = pivoted.reindex(index=D_SORTER[index])  # 对于部分变量有固定列排序
+                pivoted = pivoted.reindex(index=D_SORTER[index]).dropna(
+                    how="all", axis=0
+                )  # 对于部分变量有固定列排序，用reindex固定字典后要dropna
             except KeyError:
                 pass
 
         if column in D_SORTER:
             try:
-                pivoted = pivoted.reindex(columns=D_SORTER[column])  # 对于部分变量有固定列排序
+                pivoted = pivoted.reindex(columns=D_SORTER[column]).dropna(
+                    how="all", axis=1
+                )  # 对于部分变量有固定列排序，用reindex固定字典后要dropna
             except KeyError:
                 pass
 
