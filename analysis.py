@@ -25,4 +25,10 @@ pt_cm_bj = Potential(df.loc[mask, :], name="北京社区医院", savepath="./plo
 #     value="医院名称", index="潜力分位", column="信立坦销售表现", 
 # )
 
-pt_cm.plot_share_pie(value="终端潜力值", index="销售状态", unit_index="百万")
+# df_potential = pt_hp_hassale.get_pivot(value="信立坦同期销量", index="潜力分位", column=None, aggfunc=sum)
+# df_number = pt_hp_hassale.get_pivot("医院名称", index="潜力分位",column=None, aggfunc=len)
+# df_combined = pd.concat([df_potential, df_number],axis=1)
+# df_combined["终端单产"] = df_combined["信立坦同期销量"]/df_combined["医院名称"]/12/7
+# print(df_combined)
+
+pt_hp.table_to_excel("城市", top=100)
