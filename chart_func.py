@@ -1181,9 +1181,9 @@ def plot_barline(
         ax2 = ax.twinx()
 
         if isinstance(df_line, pd.DataFrame):
-            label = df_line.columns[0] + "占比"
+            label = df_line.columns[0]
         else:
-            label = df_line.name + "占比"
+            label = df_line.name
 
         color_line = "darkorange"
         ax2.plot(

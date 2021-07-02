@@ -31,4 +31,4 @@ pt_cm_bj = Potential(df.loc[mask, :], name="北京社区医院", savepath="./plo
 # df_combined["终端单产"] = df_combined["信立坦同期销量"]/df_combined["医院名称"]/12/7
 # print(df_combined)
 
-pt_hp.table_to_excel("城市", top=100)
+pt_hp.table_to_excel("省份", top=100)
