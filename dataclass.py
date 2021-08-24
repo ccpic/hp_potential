@@ -1,5 +1,5 @@
 import collections
-from matplotlib.pyplot import title, xlabel
+from matplotlib.pyplot import title, xlabel, ylim
 import pandas as pd
 import numpy as np
 from pandas.core.reshape.pivot import pivot_table
@@ -21,11 +21,13 @@ D_SORTER = {
 
 D_AGGFUNC = {
     "终端潜力值": sum,
-    "信立坦同期销量": sum,
+    "信立坦MAT销量": sum,
     "信立坦2021指标": sum,
     "信立坦销售份额": np.mean,
     "医院名称": len,
     "销售代表": lambda x: ",".join(x.astype(str)),
+    "地区经理": sum,
+    "销售状态": sum,
 }
 
 D_UNIT = {
@@ -71,16 +73,16 @@ class Potential(pd.DataFrame):
         self.name = name
         self.savepath = savepath
 
-    def get_table(self, index, top=None):  # 综合表现表格
+    def get_table(self, index, top=None, sort_by="潜力(DOT)"):  # 综合表现表格
         if index == "医院名称":  # 出单家医院数据，无需透视
             df = self.loc[
-                :, ["医院名称", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦同期销量", "信立坦销售份额"]
+                :, ["医院名称", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦MAT销量", "信立坦销售份额"]
             ]
 
             df.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
 
             df["潜力贡献"] = df["终端潜力值"] / df["终端潜力值"].sum()
-            df["信立坦销售贡献"] = df["信立坦同期销量"] / df["信立坦同期销量"].sum()
+            df["信立坦销售贡献"] = df["信立坦MAT销量"] / df["信立坦MAT销量"].sum()
 
             df = df.reindex(
                 [
@@ -91,7 +93,7 @@ class Potential(pd.DataFrame):
                     "终端潜力值",
                     "潜力贡献",
                     "销售状态",
-                    "信立坦同期销量",
+                    "信立坦MAT销量",
                     "信立坦销售贡献",
                     "信立坦销售份额",
                 ],
@@ -102,14 +104,16 @@ class Potential(pd.DataFrame):
                 "省份",
                 "城市",
                 "潜力分位",
-                "潜力值(DOT)",
+                "潜力(DOT)",
                 "潜力贡献",
                 "销售状态",
-                "信立坦同期销量(DOT)",
+                "信立坦MAT销量(DOT)",
                 "信立坦销售贡献",
                 "信立坦销售份额",
             ]
             df.set_index("终端名称", inplace=True)
+
+            df.sort_values(by=sort_by, ascending=False, inplace=True)  # 根据参数列由高到低排序
 
             # 只取top items，应该放在计算合计前
             if top is not None:
@@ -171,7 +175,7 @@ class Potential(pd.DataFrame):
             # 内部销售部分
             pivoted_sales = pd.pivot_table(
                 data=self,
-                values="信立坦同期销量",
+                values="信立坦MAT销量",
                 index=index,
                 columns=None,
                 aggfunc=sum,
@@ -181,9 +185,9 @@ class Potential(pd.DataFrame):
                 pivoted_sales.to_records()
             )  # pivot table对象转为默认df
             pivoted_sales.set_index(index, inplace=True)
-            pivoted_sales.columns = ["信立坦同期销量(DOT)"]
+            pivoted_sales.columns = ["信立坦MAT销量(DOT)"]
             pivoted_sales["信立坦销售贡献"] = (
-                pivoted_sales["信立坦同期销量(DOT)"] / pivoted_sales["信立坦同期销量(DOT)"].sum()
+                pivoted_sales["信立坦MAT销量(DOT)"] / pivoted_sales["信立坦MAT销量(DOT)"].sum()
             )
 
             # 销售代表部分
@@ -204,12 +208,12 @@ class Potential(pd.DataFrame):
                 [pivoted_potential, pivoted_access, pivoted_sales, pivoted_reps], axis=1
             )
             df_combined["信立坦所有终端份额"] = (
-                df_combined["信立坦同期销量(DOT)"] / df_combined["潜力(DOT)"]
+                df_combined["信立坦MAT销量(DOT)"] / df_combined["潜力(DOT)"]
             )
-            df_combined["信立坦目标终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
+            df_combined["信立坦目标终端份额"] = df_combined["信立坦MAT销量(DOT)"] / (
                 df_combined["潜力(DOT)"] * df_combined["信立坦目标覆盖潜力(DOT %)"]
             )
-            df_combined["信立坦销售终端份额"] = df_combined["信立坦同期销量(DOT)"] / (
+            df_combined["信立坦销售终端份额"] = df_combined["信立坦MAT销量(DOT)"] / (
                 df_combined["潜力(DOT)"] * df_combined["信立坦销售覆盖潜力(DOT %)"]
             )
 
@@ -217,13 +221,13 @@ class Potential(pd.DataFrame):
                 df_combined["潜力(DOT)"] / df_combined["销售代表人数"]
             )
             df_combined["代表人均销量(月均盒数)"] = (
-                df_combined["信立坦同期销量(DOT)"] / df_combined["销售代表人数"] / 7 / 12
+                df_combined["信立坦MAT销量(DOT)"] / df_combined["销售代表人数"] / 7 / 12
             )
 
             df_combined.sort_values(
-                by=["潜力(DOT)"], ascending=False, inplace=True
-            )  # 根据潜力由高到低排序
-
+                by=sort_by, ascending=False, inplace=True
+            )  # 根据参数列由高到低排序
+            print(df_combined)
             # 只取top items，应该放在计算合计前
             if top is not None:
                 df_combined = df_combined.iloc[:top, :]
@@ -232,7 +236,7 @@ class Potential(pd.DataFrame):
             list_reps = df_combined["销售代表"].values.tolist()
             list_all = []
             for l in list_reps:
-                for ele in l:
+                for ele in l.split(","):
                     if ele != "nan":
                         list_all.append(ele)
             number_total_reps = len(list(set(list_all)))
@@ -251,18 +255,19 @@ class Potential(pd.DataFrame):
             ).sum() / df_combined.loc["合计", "潜力(DOT)"]
 
             df_combined.loc["合计", "信立坦所有终端份额"] = (
-                df_combined.loc["合计", "信立坦同期销量(DOT)"] / df_combined.loc["合计", "潜力(DOT)"]
+                df_combined.loc["合计", "信立坦MAT销量(DOT)"]
+                / df_combined.loc["合计", "潜力(DOT)"]
             )
 
             df_combined.loc["合计", "信立坦目标终端份额"] = df_combined.loc[
-                "合计", "信立坦同期销量(DOT)"
+                "合计", "信立坦MAT销量(DOT)"
             ] / (
                 df_combined.loc["合计", "潜力(DOT)"]
                 * df_combined.loc["合计", "信立坦目标覆盖潜力(DOT %)"]
             )
 
             df_combined.loc["合计", "信立坦销售终端份额"] = df_combined.loc[
-                "合计", "信立坦同期销量(DOT)"
+                "合计", "信立坦MAT销量(DOT)"
             ] / (
                 df_combined.loc["合计", "潜力(DOT)"]
                 * df_combined.loc["合计", "信立坦销售覆盖潜力(DOT %)"]
@@ -288,7 +293,7 @@ class Potential(pd.DataFrame):
                     "信立坦目标覆盖潜力(DOT %)",
                     "信立坦销售覆盖终端数量",
                     "信立坦销售覆盖潜力(DOT %)",
-                    "信立坦同期销量(DOT)",
+                    "信立坦MAT销量(DOT)",
                     "信立坦销售贡献",
                     "信立坦所有终端份额",
                     "信立坦目标终端份额",
@@ -303,8 +308,8 @@ class Potential(pd.DataFrame):
 
             return df_combined
 
-    def table_to_excel(self, index, top=None):
-        df = self.get_table(index, top=top)
+    def table_to_excel(self, index, top=None, sort_by="潜力(DOT)"):
+        df = self.get_table(index, top=top, sort_by=sort_by)
 
         # # Pandas导出
         # df.to_excel(writer, sheet_name="data")
@@ -400,7 +405,7 @@ class Potential(pd.DataFrame):
             sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
             sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
             sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
-            sht.set_column(8, 8, width_wider, format_abs)  # 信立坦同期销量
+            sht.set_column(8, 8, width_wider, format_abs)  # 信立坦MAT销量
             sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
             sht.set_column(13, 13, width_default, format_abs)  # 销售代表人数
             sht.set_column(14, 14, width_wider, format_abs)  # 人均覆盖
@@ -703,14 +708,18 @@ class Potential(pd.DataFrame):
         fmt_x="{:,.0f}",
         fmt_y="{:,.0f}",
         label_limit=30,
+        lim_y=None,
     ):
         aggfunc1 = D_AGGFUNC[value_x]
         df_x = self.get_pivot(
-            value=value_x,
+            value="终端潜力值",
             index=index,
-            column=None,
+            column="销售状态",
             aggfunc=aggfunc1,
         )
+
+        df_x = df_x.loc[:, "有销量目标医院"]
+        print(df_x)
         # 是否取对数
         if log_x:
             df_x = np.log(df_x)
@@ -747,6 +756,8 @@ class Potential(pd.DataFrame):
         df_combined = pd.concat([df_x, df_y], axis=1)
         df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
 
+        df_combined.columns = ["信立坦已开户潜力", "信立坦已开户终端销售份额"]
+
         # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
         if top is not None:
@@ -776,12 +787,18 @@ class Potential(pd.DataFrame):
             value_y,
         )
 
+        if lim_y is not None:
+            ylim = lim_y
+
+        title = "全国社区医院各城市已开户潜力 vs. 信立坦已开户终端销售份额"
+        xtitle = "信立坦已开户潜力"
+        ytitle = "信立坦已开户终端销售份额"
         # 绘图
         plot_bubble(
             savefile="%s%s气泡图.png" % (self.savepath, title.replace("\n", "")),
-            x=df_combined[value_x],
-            y=df_combined[value_y],
-            z=df_combined[value_x],
+            x=df_combined[xtitle],
+            y=df_combined[ytitle],
+            z=df_combined[xtitle] * df_combined[ytitle],
             labels=df_combined.index,
             title=title,
             xtitle=xtitle,
@@ -791,4 +808,5 @@ class Potential(pd.DataFrame):
             yfmt=fmt_y,
             label_limit=label_limit,
             with_reg=with_reg,
+            ylim=ylim,
         )

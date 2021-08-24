@@ -35,7 +35,7 @@ def prepare_data():
 
     # 导入社区医院终端潜力数据
     df_cm = pd.read_excel(
-        open("潜力数据.xlsx", "rb"), sheet_name="社区潜力"
+        open("潜力数据.xlsx", "rb"), sheet_name="社区潜力终版"
     )  # 从Excel读取社区医院潜力数据
     df_cm = df_cm.loc[:, ["信立泰ID", "终端名称", "省份", "城市", "区县", "潜力值（DOT）"]]
     df_cm.columns = ["医院编码", "医院名称", "省份", "城市", "区县", "终端潜力值"]
@@ -59,14 +59,14 @@ def prepare_data():
         lambda row: "非目标医院"
         if pd.isna(row["医院编码"])
         else (
-            "无销量目标医院" if pd.isna(row["信立坦同期销量"]) or row["信立坦同期销量"] == 0 else "有销量目标医院"
+            "无销量目标医院" if pd.isna(row["信立坦MAT销量"]) or row["信立坦MAT销量"] == 0 else "有销量目标医院"
         ),
         axis=1,
     )
     # 根据是否有医院编码以及是否有销量标记终端销售状态
 
     # 计算终端信立坦销售份额
-    df_combined["信立坦销售份额"] = df_combined["信立坦同期销量"] / df_combined["终端潜力值"]
+    df_combined["信立坦销售份额"] = df_combined["信立坦MAT销量"] / df_combined["终端潜力值"]
     df_combined["信立坦销售表现"] = df_combined["信立坦销售份额"].apply(lambda x: share_cond(x))
 
     # 计算潜力分位
