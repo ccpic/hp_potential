@@ -19,7 +19,7 @@ def share_cond(share):
         condition = "信立坦份额>10%"
     else:
         condition = "未开户或非目标"
-        
+
     return condition
 
 

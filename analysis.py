@@ -28,16 +28,17 @@ pt_cm_hassale = Potential(
     df.loc[mask, :], name="%s有量社区医院" % filter_name, savepath="./plots/%s/" % filter_name
 )
 
-# 终端潜力 vs 信立坦份额 气泡图
-pt_cm.plot_2d_bubble(
-    value_x="销售状态",
-    value_y="信立坦销售份额",
-    index="城市",
-    log_x=False,
-    log_y=False,
-    z_scale=0.0001,
-    label_limit=40,
-    with_reg=False,
-    fmt_y="{:.0%}",
-    lim_y=[0, 0.4],
-)
+# # 终端潜力 vs 信立坦份额 气泡图
+# pt_cm.plot_2d_bubble(
+#     value_x="销售状态",
+#     value_y="信立坦销售份额",
+#     index="城市",
+#     log_x=False,
+#     log_y=False,
+#     z_scale=0.0001,
+#     label_limit=40,
+#     with_reg=False,
+#     fmt_y="{:.0%}",
+#     lim_y=[0, 0.4],
+# )
+pt_hp.table_to_excel(index="地区经理")
