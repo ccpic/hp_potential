@@ -76,7 +76,7 @@ class Potential(pd.DataFrame):
     def get_table(self, index, top=None, sort_by="潜力(DOT)"):  # 综合表现表格
         if index == "医院名称":  # 出单家医院数据，无需透视
             df = self.loc[
-                :, ["医院名称", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦MAT销量", "信立坦销售份额"]
+                :, ["医院编码", "医院名称", "医院类型", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦MAT销量", "信立坦销售份额"]
             ]
 
             df.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
@@ -86,7 +86,9 @@ class Potential(pd.DataFrame):
 
             df = df.reindex(
                 [
+                    "医院编码",
                     "医院名称",
+                    "医院类型",
                     "省份",
                     "城市",
                     "潜力分位",
@@ -100,7 +102,9 @@ class Potential(pd.DataFrame):
                 axis=1,
             )
             df.columns = [
+                "终端编码",
                 "终端名称",
+                "终端类型",
                 "省份",
                 "城市",
                 "潜力分位",
@@ -111,7 +115,7 @@ class Potential(pd.DataFrame):
                 "信立坦销售贡献",
                 "信立坦销售份额",
             ]
-            df.set_index("终端名称", inplace=True)
+            df.set_index("终端编码", inplace=True)
 
             df.sort_values(by=sort_by, ascending=False, inplace=True)  # 根据参数列由高到低排序
 
@@ -124,7 +128,7 @@ class Potential(pd.DataFrame):
             sort_by = "已开户潜力(DOT)"
             # 潜力部分
             pivoted_potential = pd.pivot_table(
-                data=self,
+                data=self[self["销售状态"] == "有销量目标医院"],
                 values="终端潜力值",
                 index=index,
                 columns=None,
@@ -461,218 +465,230 @@ class Potential(pd.DataFrame):
 
             return df_combined
 
-    def table_to_excel(self, index, top=None, sort_by="潜力(DOT)"):
-        df = self.get_table(index, top=top, sort_by=sort_by)
-        print(df)
-        # # Pandas导出
-        # df.to_excel(writer, sheet_name="data")
-
+    def table_to_excel(self, lst_index, top=None, sort_by="潜力(DOT)"):
         # 获取工作表对象
-        path = "%s%s%s潜力及销售表现表格.xlsx" % (self.savepath, self.name, index)
+        path = "%s%s潜力及销售表现表格.xlsx" % (self.savepath, self.name)
         wbk = xlsxwriter.Workbook(path, {"nan_inf_to_errors": True})
-        sht = wbk.add_worksheet()
+        
+        for index in lst_index:
+            df = self.get_table(index, top=top, sort_by=sort_by)
+            print(df)
+            # # Pandas导出
+            # df.to_excel(writer, sheet_name="data")
 
-        # 添加表格
-        sht.add_table(
-            first_row=0,
-            first_col=0,
-            last_row=df.shape[0],
-            last_col=df.shape[1],
-            options={
-                "data": [[i for i in row] for row in df.itertuples()],
-                "header_row": True,
-                "first_column": True,
-                "style": "Table Style Light 1",
-                "columns": [{"header": c} for c in df.reset_index().columns.tolist()],
-                "autofilter": 0,
-            },
-        )
+            if index in ["事业部", "区域", "大区经理", "地区经理"]:
+                sht_name = index + "（已开户潜力）"
+            elif index == "医院名称":
+                sht_name = "终端明细"
+            elif index == "潜力分位":
+                sht_name = "潜力分位（等级和社区医院合并计算）"
+            else:
+                sht_name = index
+            sht = wbk.add_worksheet(name=sht_name)
 
-        # 添加格式
-        format_abs = wbk.add_format(
-            {
-                "num_format": "#,##0",
-                "font_name": "Arial",
-                "font_size": 10,
-            }
-        )
-        format_share = wbk.add_format(
-            {
-                "num_format": "0.0%",
-                "font_name": "Arial",
-                "font_size": 10,
-                "valign": "center",
-            }
-        )
-        format_total_row = wbk.add_format(
-            {
-                "font_name": "Arial",
-                "bold": True,
-                "font_color": "#FFFFFF",
-                "bg_color": "#000000",
-                "valign": "center",
-            }
-        )
-        format_thick_border = wbk.add_format({"border": 5})
-        # 应用格式到具体单元格
-        width_default = 10
-        width_wider = 14
-        if index == "医院名称":
-            sht.set_column(0, 0, 38, format_abs)  # 索引项
-            sht.set_column(1, 3, 8, format_abs)  # 省/市/潜力分位
-            sht.set_column(4, 4, width_wider, format_abs)  # 终端潜力
-            sht.set_column(5, 6, width_default, format_share)  # 潜力贡献/销售状态
-            sht.set_column(7, 7, width_default, format_abs)  # 信立坦销售
-            sht.set_column(8, 9, width_default, format_share)  # 信立坦销售量/销售份额
-
-            # 添加条件格式条形图
-            sht.conditional_format(  # 潜力贡献
-                first_row=1,
-                first_col=5,
-                last_row=df.shape[0] - 1,
-                last_col=5,
-                options={"type": "data_bar"},
+            # 添加表格
+            sht.add_table(
+                first_row=0,
+                first_col=0,
+                last_row=df.shape[0],
+                last_col=df.shape[1],
+                options={
+                    "data": [[i for i in row] for row in df.itertuples()],
+                    "header_row": True,
+                    "first_column": True,
+                    "style": "Table Style Light 1",
+                    "columns": [{"header": c} for c in df.reset_index().columns.tolist()],
+                    "autofilter": 0,
+                },
             )
 
-            sht.conditional_format(  # 信立坦销售贡献
-                first_row=1,
-                first_col=8,
-                last_row=df.shape[0] - 1,
-                last_col=8,
-                options={"type": "data_bar", "bar_color": "#D0B5FD"},
+            # 添加格式
+            format_abs = wbk.add_format(
+                {
+                    "num_format": "#,##0",
+                    "font_name": "Arial",
+                    "font_size": 10,
+                }
             )
+            format_share = wbk.add_format(
+                {
+                    "num_format": "0.0%",
+                    "font_name": "Arial",
+                    "font_size": 10,
+                    "valign": "center",
+                }
+            )
+            format_total_row = wbk.add_format(
+                {
+                    "font_name": "Arial",
+                    "bold": True,
+                    "font_color": "#FFFFFF",
+                    "bg_color": "#000000",
+                    "valign": "center",
+                }
+            )
+            format_thick_border = wbk.add_format({"border": 5})
+            # 应用格式到具体单元格
+            width_default = 10
+            width_wider = 14
+            if index == "医院名称":
+                sht.set_column(0, 0, 8, format_abs)  # 医院编码
+                sht.set_column(1, 1, 38, format_abs)  # 医院名称
+                sht.set_column(2, 2, 8, format_abs)  # 医院类型
+                sht.set_column(3, 5, 8, format_abs)  # 省/市/潜力分位
+                sht.set_column(6, 6, width_wider, format_abs)  # 终端潜力
+                sht.set_column(7, 8, width_default, format_share)  # 潜力贡献/销售状态
+                sht.set_column(9, 9, width_default, format_abs)  # 信立坦销售
+                sht.set_column(10, 11, width_default, format_share)  # 信立坦销售量/销售份额
 
-            sht.conditional_format(  # 信立坦份额
-                first_row=1,
-                first_col=9,
-                last_row=df.shape[0] - 1,
-                last_col=9,
-                options={"type": "data_bar", "bar_color": "#B1E1C1"},
-            )
-        elif index in ["事业部", "区域", "大区经理", "地区经理"]:
-            sht.set_column(0, 0, 38, format_abs)  # 索引项
-            sht.set_column(1, 1, 8, format_abs)  # 终端数量
-            sht.set_column(2, 2, width_wider, format_abs)  # 终端潜力
-            sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
-            sht.set_column(4, 4, width_default, format_abs)  # 信立坦销售
-            sht.set_column(5, 5, width_default, format_share)  # 销售贡献
-            sht.set_column(6, 6, width_default, format_share)  # 信立坦销售份额
-            sht.set_column(7, 7, width_default, format_abs)  # 销售代表人数
-            sht.set_column(8, 8, width_wider, format_abs)  # 人均覆盖
-            sht.set_column(9, 9, width_default, format_abs)  # 人均单产
+                # 添加条件格式条形图
+                sht.conditional_format(  # 潜力贡献
+                    first_row=1,
+                    first_col=7,
+                    last_row=df.shape[0] - 1,
+                    last_col=7,
+                    options={"type": "data_bar"},
+                )
 
-            # 添加条件格式条形图
-            sht.conditional_format(  # 潜力贡献
-                first_row=1,
-                first_col=3,
-                last_row=df.shape[0] - 1,
-                last_col=3,
-                options={"type": "data_bar"},
-            )
+                sht.conditional_format(  # 信立坦销售贡献
+                    first_row=1,
+                    first_col=10,
+                    last_row=df.shape[0] - 1,
+                    last_col=10,
+                    options={"type": "data_bar", "bar_color": "#D0B5FD"},
+                )
 
-            sht.conditional_format(  # 信立坦销售贡献
-                first_row=1,
-                first_col=5,
-                last_row=df.shape[0] - 1,
-                last_col=5,
-                options={"type": "data_bar", "bar_color": "#D0B5FD"},
-            )
+                sht.conditional_format(  # 信立坦份额
+                    first_row=1,
+                    first_col=11,
+                    last_row=df.shape[0] - 1,
+                    last_col=11,
+                    options={"type": "data_bar", "bar_color": "#B1E1C1"},
+                )
+            elif index in ["事业部", "区域", "大区经理", "地区经理"]:
+                sht.set_column(0, 0, 38, format_abs)  # 索引项
+                sht.set_column(1, 1, 8, format_abs)  # 终端数量
+                sht.set_column(2, 2, width_wider, format_abs)  # 终端潜力
+                sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
+                sht.set_column(4, 4, width_default, format_abs)  # 信立坦销售
+                sht.set_column(5, 5, width_default, format_share)  # 销售贡献
+                sht.set_column(6, 6, width_default, format_share)  # 信立坦销售份额
+                sht.set_column(7, 7, width_default, format_abs)  # 销售代表人数
+                sht.set_column(8, 8, width_wider, format_abs)  # 人均覆盖
+                sht.set_column(9, 9, width_default, format_abs)  # 人均单产
 
-            sht.conditional_format(  # 信立坦份额
-                first_row=1,
-                first_col=6,
-                last_row=df.shape[0] - 1,
-                last_col=6,
-                options={"type": "data_bar", "bar_color": "#B1E1C1"},
-            )
+                # 添加条件格式条形图
+                sht.conditional_format(  # 潜力贡献
+                    first_row=1,
+                    first_col=3,
+                    last_row=df.shape[0] - 1,
+                    last_col=3,
+                    options={"type": "data_bar"},
+                )
 
-            sht.conditional_format(  # 人均覆盖潜力
-                first_row=1,
-                first_col=8,
-                last_row=df.shape[0] - 1,
-                last_col=8,
-                options={"type": "data_bar", "bar_color": "#FF8F92"},
-            )
+                sht.conditional_format(  # 信立坦销售贡献
+                    first_row=1,
+                    first_col=5,
+                    last_row=df.shape[0] - 1,
+                    last_col=5,
+                    options={"type": "data_bar", "bar_color": "#D0B5FD"},
+                )
 
-            sht.conditional_format(  # 人均单产
-                first_row=1,
-                first_col=9,
-                last_row=df.shape[0] - 1,
-                last_col=9,
-                options={"type": "data_bar", "bar_color": "#FF8F92"},
-            )
-        else:
-            sht.set_column(0, 0, width_default, format_abs)  # 索引列
-            sht.set_column(1, 1, width_default, format_abs)  # 终端数量
-            sht.set_column(2, 2, width_wider, format_abs)  # 潜力DOT
-            sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
-            sht.set_column(4, 4, width_default, format_abs)  # 信立坦目标终端数量
-            sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
-            sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
-            sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
-            sht.set_column(8, 8, width_wider, format_abs)  # 信立坦MAT销量
-            sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
-            sht.set_column(13, 13, width_default, format_abs)  # 销售代表人数
-            sht.set_column(14, 14, width_wider, format_abs)  # 人均覆盖
-            sht.set_column(15, 15, width_default, format_abs)  # 人均单产
-            # sht.set_row(df.shape[0],None, format_total_row)
+                sht.conditional_format(  # 信立坦份额
+                    first_row=1,
+                    first_col=6,
+                    last_row=df.shape[0] - 1,
+                    last_col=6,
+                    options={"type": "data_bar", "bar_color": "#B1E1C1"},
+                )
 
-            # 添加条件格式条形图
-            sht.conditional_format(  # 潜力贡献
-                first_row=1,
-                first_col=3,
-                last_row=df.shape[0] - 1,
-                last_col=3,
-                options={"type": "data_bar"},
-            )
+                sht.conditional_format(  # 人均覆盖潜力
+                    first_row=1,
+                    first_col=8,
+                    last_row=df.shape[0] - 1,
+                    last_col=8,
+                    options={"type": "data_bar", "bar_color": "#FF8F92"},
+                )
 
-            sht.conditional_format(  # 信立坦目标覆盖潜力%
-                first_row=1,
-                first_col=5,
-                last_row=df.shape[0] - 1,
-                last_col=5,
-                options={"type": "data_bar", "bar_color": "#FFB628"},
-            )
+                sht.conditional_format(  # 人均单产
+                    first_row=1,
+                    first_col=9,
+                    last_row=df.shape[0] - 1,
+                    last_col=9,
+                    options={"type": "data_bar", "bar_color": "#FF8F92"},
+                )
+            else:
+                sht.set_column(0, 0, width_default, format_abs)  # 索引列
+                sht.set_column(1, 1, width_default, format_abs)  # 终端数量
+                sht.set_column(2, 2, width_wider, format_abs)  # 潜力DOT
+                sht.set_column(3, 3, width_default, format_share)  # 潜力贡献
+                sht.set_column(4, 4, width_default, format_abs)  # 信立坦目标终端数量
+                sht.set_column(5, 5, width_default, format_share)  # 信立坦目标终端潜力覆盖(%)
+                sht.set_column(6, 6, width_default, format_abs)  # 信立坦销售终端数量
+                sht.set_column(7, 7, width_default, format_share)  # 信立坦销售终端潜力覆盖(%)
+                sht.set_column(8, 8, width_wider, format_abs)  # 信立坦MAT销量
+                sht.set_column(9, 12, width_default, format_share)  # 信立坦销售贡献, 3种base的份额
+                sht.set_column(13, 13, width_default, format_abs)  # 销售代表人数
+                sht.set_column(14, 14, width_wider, format_abs)  # 人均覆盖
+                sht.set_column(15, 15, width_default, format_abs)  # 人均单产
+                # sht.set_row(df.shape[0],None, format_total_row)
 
-            sht.conditional_format(  # 信立坦目标销售覆盖潜力%
-                first_row=1,
-                first_col=7,
-                last_row=df.shape[0] - 1,
-                last_col=7,
-                options={"type": "data_bar", "bar_color": "#FFB628"},
-            )
+                # 添加条件格式条形图
+                sht.conditional_format(  # 潜力贡献
+                    first_row=1,
+                    first_col=3,
+                    last_row=df.shape[0] - 1,
+                    last_col=3,
+                    options={"type": "data_bar"},
+                )
 
-            sht.conditional_format(  # 信立坦贡献
-                first_row=1,
-                first_col=9,
-                last_row=df.shape[0] - 1,
-                last_col=9,
-                options={"type": "data_bar", "bar_color": "#D0B5FD"},
-            )
+                sht.conditional_format(  # 信立坦目标覆盖潜力%
+                    first_row=1,
+                    first_col=5,
+                    last_row=df.shape[0] - 1,
+                    last_col=5,
+                    options={"type": "data_bar", "bar_color": "#FFB628"},
+                )
 
-            sht.conditional_format(  # 三列份额
-                first_row=1,
-                first_col=10,
-                last_row=df.shape[0] - 1,
-                last_col=12,
-                options={"type": "data_bar", "bar_color": "#B1E1C1"},
-            )
+                sht.conditional_format(  # 信立坦目标销售覆盖潜力%
+                    first_row=1,
+                    first_col=7,
+                    last_row=df.shape[0] - 1,
+                    last_col=7,
+                    options={"type": "data_bar", "bar_color": "#FFB628"},
+                )
 
-            sht.conditional_format(  # 人均覆盖潜力
-                first_row=1,
-                first_col=14,
-                last_row=df.shape[0] - 1,
-                last_col=14,
-                options={"type": "data_bar", "bar_color": "#FF8F92"},
-            )
+                sht.conditional_format(  # 信立坦贡献
+                    first_row=1,
+                    first_col=9,
+                    last_row=df.shape[0] - 1,
+                    last_col=9,
+                    options={"type": "data_bar", "bar_color": "#D0B5FD"},
+                )
 
-            sht.conditional_format(  # 人均单产
-                first_row=1,
-                first_col=15,
-                last_row=df.shape[0] - 1,
-                last_col=15,
-                options={"type": "data_bar", "bar_color": "#FF8F92"},
-            )
+                sht.conditional_format(  # 三列份额
+                    first_row=1,
+                    first_col=10,
+                    last_row=df.shape[0] - 1,
+                    last_col=12,
+                    options={"type": "data_bar", "bar_color": "#B1E1C1"},
+                )
+
+                sht.conditional_format(  # 人均覆盖潜力
+                    first_row=1,
+                    first_col=14,
+                    last_row=df.shape[0] - 1,
+                    last_col=14,
+                    options={"type": "data_bar", "bar_color": "#FF8F92"},
+                )
+
+                sht.conditional_format(  # 人均单产
+                    first_row=1,
+                    first_col=15,
+                    last_row=df.shape[0] - 1,
+                    last_col=15,
+                    options={"type": "data_bar", "bar_color": "#FF8F92"},
+                )
         wbk.close()
 
     def get_pivot(self, value, index, column, aggfunc):  # 透视表
@@ -776,8 +792,10 @@ class Potential(pd.DataFrame):
 
         if percentage_label:
             y1labelfmt = "{:.0%}"
+            show_total = False
         else:
             y1labelfmt = "{:,.0f}"
+            show_total = True
 
         # 图表标题
         title = "%s%s%s%s%s" % (

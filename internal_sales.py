@@ -9,11 +9,11 @@ df = pd.read_excel(
 df["标准数量"] = df["标准数量"] * 7  # 盒数转化成片数
 mask = df["产品名称"] == "信立坦"
 
-
 mask_sales = mask & (df.tag.isin(["销量", "药房销量"])) & (df["填报日期"].between(202008, 202107))
 df_sales = df.loc[mask_sales, :]
 print(df_sales["填报日期"].unique())
 pivoted_sales = pd.pivot_table(data=df_sales, values="标准数量", index="目标代码", aggfunc=sum)
+
 
 print(pivoted_sales)
 pivoted_reps = pd.pivot_table(

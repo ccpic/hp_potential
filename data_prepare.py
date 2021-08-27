@@ -7,6 +7,28 @@ from chart_func import *
 pd.set_option("display.max_columns", 5000)
 pd.set_option("display.width", 5000)
 
+cm_sh = [
+    "H080000566",
+    "H080000228",
+    "H080000332",
+    "H080000277",
+    "H080000279",
+    "H080000159",
+    "H080000113",
+    "H080000626",
+    "H080000423",
+    "H080000570",
+    "H080000634",
+    "H080000266",
+    "H080000241",
+    "H080000578",
+    "H080000340",
+    "H080000044",
+    "H080000177",
+    "H080000243",
+    "H080000655",
+]
+
 
 def share_cond(share):
     if share < 0.01:
@@ -59,7 +81,13 @@ def prepare_data():
         lambda row: "非目标医院"
         if pd.isna(row["医院编码"])
         else (
-            "无销量目标医院" if pd.isna(row["信立坦MAT销量"]) or row["信立坦MAT销量"] == 0 else "有销量目标医院"
+            "无销量目标医院"
+            if (
+                pd.isna(row["信立坦MAT销量"])  # 无销量终端
+                or row["信立坦MAT销量"] == 0  # 销量为0
+                or (row["省份"] == "上海" and row["医院类型"] == "社区医院" and row["医院编码"] not in cm_sh)
+            )  # 上海非真正开户的（中心），有销量但为大医院处方延续
+            else "有销量目标医院"
         ),
         axis=1,
     )

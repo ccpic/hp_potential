@@ -9,11 +9,13 @@ from data_prepare import prepare_data
 df = prepare_data()
 
 filter_name = "全国"
-filter_mask = (df["省份"]!="台湾")
+filter_mask = df["省份"] != "台湾"
 
 mask = filter_mask
 pt_total = Potential(
-    df.loc[mask, :], name="%s城市医院整体市场" % filter_name, savepath="./plots/%s/" % filter_name
+    df.loc[mask, :],
+    name="%s城市医院整体市场" % filter_name,
+    savepath="./plots/%s/" % filter_name,
 )
 mask = (df["医院类型"] == "公立医院") & filter_mask
 pt_hp = Potential(
@@ -41,4 +43,8 @@ pt_cm_hassale = Potential(
 #     fmt_y="{:.0%}",
 #     lim_y=[0, 0.4],
 # )
-pt_hp.table_to_excel(index="地区经理")
+pt_total.table_to_excel(
+    lst_index=["省份", "城市", "潜力分位", "医院名称", "事业部", "区域", "大区经理", "地区经理"]
+)
+
+
