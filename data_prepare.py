@@ -77,6 +77,8 @@ def prepare_data():
     df_combined = pd.merge(
         left=df_combined, right=df_internal, how="left", on="医院编码"
     )  # left表示以潜力数据为主题匹配
+
+    # 根据是否有医院编码以及是否有销量标记终端销售状态
     df_combined["销售状态"] = df_combined.apply(
         lambda row: "非目标医院"
         if pd.isna(row["医院编码"])
@@ -85,13 +87,21 @@ def prepare_data():
             if (
                 pd.isna(row["信立坦MAT销量"])  # 无销量终端
                 or row["信立坦MAT销量"] == 0  # 销量为0
-                or (row["省份"] == "上海" and row["医院类型"] == "社区医院" and row["医院编码"] not in cm_sh)
+                or (
+                    row["省份"] == "上海"
+                    and row["医院类型"] == "社区医院"
+                    and row["医院编码"] not in cm_sh
+                )
             )  # 上海非真正开户的（中心），有销量但为大医院处方延续
             else "有销量目标医院"
         ),
         axis=1,
     )
-    # 根据是否有医院编码以及是否有销量标记终端销售状态
+
+    # 根据医院名称划分中医院
+    df_combined["中医院"] = df_combined["医院名称"].apply(
+        lambda x: "中医院" if ("中医" in x or "中西医" in x) and x != "北大医疗鲁中医院" else "非中医院"
+    )
 
     # 计算终端信立坦销售份额
     df_combined["信立坦销售份额"] = df_combined["信立坦MAT销量"] / df_combined["终端潜力值"]

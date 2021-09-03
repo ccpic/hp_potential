@@ -26,6 +26,8 @@ NUM_FONT = {"fontname": "Calibri"}
 COLOR_DICT = {
     "公立医院": "crimson",
     "社区医院": "navy",
+    "中医院": "crimson",
+    "非中医院": "navy",
     "非目标医院": "grey",
     "有销量目标医院": "navy",
     "无销量目标医院": "dodgerblue",

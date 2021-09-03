@@ -12,7 +12,7 @@ filter_name = "全国"
 filter_mask = df["省份"] != "台湾"
 
 mask = filter_mask
-pt_total = Potential(
+pt_hp = Potential(
     df.loc[mask, :],
     name="%s城市医院整体市场" % filter_name,
     savepath="./plots/%s/" % filter_name,
@@ -30,6 +30,46 @@ pt_cm_hassale = Potential(
     df.loc[mask, :], name="%s有量社区医院" % filter_name, savepath="./plots/%s/" % filter_name
 )
 
+mask = (df["医院类型"] == "公立医院") & (df["中医院"] == "中医院") & filter_mask
+pt_zh = Potential(
+    df.loc[mask, :],
+    name="%s中医院" % filter_name,
+    savepath="./plots/中医院/%s/" % filter_name,
+)
+
+mask = (df["医院类型"] == "公立医院") & (df["中医院"] == "非中医院") & filter_mask
+pt_nzh = Potential(
+    df.loc[mask, :],
+    name="%s非中医院" % filter_name,
+    savepath="./plots/非中医院/%s/" % filter_name,
+)
+
+mask = (
+    (df["医院类型"] == "公立医院")
+    & (df["中医院"] == "中医院")
+    & (df["销售状态"] == "有销量目标医院")
+    & filter_mask
+)
+
+pt_zh_hassale = Potential(
+    df.loc[mask, :],
+    name="%s有销量中医院" % filter_name,
+    savepath="./plots/中医院/%s/" % filter_name,
+)
+
+mask = (
+    (df["医院类型"] == "公立医院")
+    & (df["中医院"] == "非中医院")
+    & (df["销售状态"] == "有销量目标医院")
+    & filter_mask
+)
+
+pt_nzh_hassale = Potential(
+    df.loc[mask, :],
+    name="%s有销量非中医院" % filter_name,
+    savepath="./plots/非中医院/%s/" % filter_name,
+)
+
 # # 终端潜力 vs 信立坦份额 气泡图
 # pt_cm.plot_2d_bubble(
 #     value_x="销售状态",
@@ -43,8 +83,44 @@ pt_cm_hassale = Potential(
 #     fmt_y="{:.0%}",
 #     lim_y=[0, 0.4],
 # )
-pt_total.table_to_excel(
+pt_hp.table_to_excel(
+    lst_index=["省份", "城市", "潜力分位", "中医院", "医院名称", "事业部", "区域", "大区经理", "地区经理"]
+)
+
+pt_zh.table_to_excel(
     lst_index=["省份", "城市", "潜力分位", "医院名称", "事业部", "区域", "大区经理", "地区经理"]
 )
 
+# # 不同医院类型潜力/指标/销售的占比饼图
+# pt_hp.plot_share_pie(value="终端潜力值", index="中医院")
+# pt_hp.plot_share_pie(value="医院名称", index="中医院")
+# pt_hp.plot_share_pie(value="信立坦2021指标", index="中医院")
+# pt_hp.plot_share_pie(value="信立坦MAT销量", index="中医院")
 
+# pt_hp.plot_pivot_stackedbar(value="终端潜力值", 
+#                                index="省份", 
+#                                column="中医院", 
+#                                line_share="中医院",
+#                                unit_index="百万", 
+#                                y1labelthreshold=10)
+# pt_hp.plot_pivot_stackedbar(value="终端潜力值", 
+#                                index="城市", 
+#                                column="中医院", 
+#                                line_share="中医院",
+#                                top=30, 
+#                                unit_index="百万", 
+#                                y1labelthreshold=10)
+
+# pt_hp.plot_pivot_stackedbar(
+#     value="医院名称", index="潜力分位", column="中医院", percentage=True, y1labelthreshold=0
+# )
+
+# pt_zh.plot_share_pie(value="终端潜力值", index="销售状态")
+# pt_zh.plot_share_pie(value="医院名称", index="销售状态")
+# pt_zh_hassale.plot_share_pie(value="终端潜力值", index="信立坦销售表现")
+# pt_zh_hassale.plot_share_pie(value="医院名称", index="信立坦销售表现")
+
+# pt_nzh.plot_share_pie(value="终端潜力值", index="销售状态")
+# pt_nzh.plot_share_pie(value="医院名称", index="销售状态")
+# pt_nzh_hassale.plot_share_pie(value="终端潜力值", index="信立坦销售表现")
+# pt_nzh_hassale.plot_share_pie(value="医院名称", index="信立坦销售表现")

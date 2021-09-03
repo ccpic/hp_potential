@@ -792,17 +792,17 @@ class Potential(pd.DataFrame):
 
         if percentage_label:
             y1labelfmt = "{:.0%}"
-            show_total = False
+            # show_total = False
         else:
             y1labelfmt = "{:,.0f}"
-            show_total = True
+            # show_total = True
 
         # 图表标题
         title = "%s%s%s%s%s" % (
             self.name,
             label_prefix,
             D_LABEL.get(index, index),
-            "" if column is None else "不同" + column,
+            "" if column is None else column,
             ytitle,
         )
 
@@ -837,7 +837,7 @@ class Potential(pd.DataFrame):
             label = "%s占比" % value
 
         # 图表标题
-        title = "%s\n不同%s\n%s" % (
+        title = "%s\n%s\n%s" % (
             self.name,
             index,
             label,
