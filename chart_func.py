@@ -31,11 +31,11 @@ COLOR_DICT = {
     "非目标医院": "grey",
     "有销量目标医院": "navy",
     "无销量目标医院": "dodgerblue",
-    "信立坦份额<1%":"crimson",
-    "信立坦份额1%-5%":"darkorange",
-    "信立坦份额5%-10%":"darkgreen",
-    "信立坦份额>10%":"dodgerblue",
-    "未开户或非目标":"grey",
+    "信立坦份额<1%": "crimson",
+    "信立坦份额1%-5%": "darkorange",
+    "信立坦份额5%-10%": "darkgreen",
+    "信立坦份额>10%": "dodgerblue",
+    "未开户或非目标": "grey",
     "拜阿司匹灵": "navy",
     "波立维": "crimson",
     "泰嘉": "teal",
@@ -730,6 +730,7 @@ def plot_pie(savefile, sizes, labels, focus=None, title=""):
     # Save the figure
     save_plot(savefile)
 
+
 def plot_bubble(
     savefile,
     x,
@@ -859,7 +860,9 @@ def plot_bubble(
             ci = (
                 t
                 * s_err
-                * np.sqrt(1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2))
+                * np.sqrt(
+                    1 / n + (x2 - np.mean(x)) ** 2 / np.sum((x - np.mean(x)) ** 2)
+                )
             )
             ax.fill_between(x2, y2 + ci, y2 - ci, color="#b9cfe7", alpha=0.5)
 
@@ -1098,6 +1101,11 @@ def plot_barline(
     show_total=False,
     total_fontsize=14,
 ):
+    # Index不为字符串可能会有bug导致x轴错位
+    df_bar.index = df_bar.index.map(str)
+    if df_line is not None:
+        df_line.index = df_line.index.map(str)
+    
     # 转换为百分百堆积柱状图
     if percentage:
         df_data = df_bar.apply(lambda x: x / x.sum(), axis=1)
@@ -1194,7 +1202,7 @@ def plot_barline(
             label=label,
             color=color_line,
             linewidth=1,
-            linestyle='dashed',
+            linestyle="dashed",
             marker="o",
             markersize=3,
             markerfacecolor="white",

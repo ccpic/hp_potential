@@ -2,6 +2,7 @@ import collections
 from matplotlib.pyplot import title, xlabel, ylim
 import pandas as pd
 import numpy as np
+from pandas.core.algorithms import value_counts
 from pandas.core.reshape.pivot import pivot_table
 from chart_func import *
 import xlsxwriter
@@ -9,6 +10,9 @@ import xlsxwriter
 D_SORTER = {
     "销售状态": ["有销量目标医院", "无销量目标医院", "非目标医院"],
     "医院类型": ["公立医院", "社区医院"],
+    "社区医院内部潜力分位": list(range(10, 0, -1)),
+    "等级医院内部潜力分位": list(range(10, 0, -1)),
+    "等级+社区合并计算潜力分位": list(range(10, 0, -1)),
     "潜力分位": list(range(10, 0, -1)),
     "信立坦销售表现": [
         "信立坦份额>10%",
@@ -22,8 +26,8 @@ D_SORTER = {
 D_AGGFUNC = {
     "终端潜力值": sum,
     "信立坦MAT销量": sum,
-    "信立坦2021指标": sum,
-    "信立坦销售份额": np.mean,
+    "信立坦年度指标": sum,
+    # "信立坦销售份额": np.mean,
     "医院名称": len,
     "销售代表": lambda x: ",".join(x.astype(str)),
     "地区经理": sum,
@@ -38,7 +42,7 @@ D_UNIT = {
     "千": 1000,
 }
 
-D_LABEL = {"医院名称": "医院"}
+D_LABEL = {"医院名称": "医院", "等级+社区合并计算潜力分位": "潜力分位"}
 
 
 class Potential(pd.DataFrame):
@@ -76,7 +80,21 @@ class Potential(pd.DataFrame):
     def get_table(self, index, top=None, sort_by="潜力(DOT)"):  # 综合表现表格
         if index == "医院名称":  # 出单家医院数据，无需透视
             df = self.loc[
-                :, ["医院编码", "医院名称", "医院类型", "省份", "城市", "潜力分位", "终端潜力值", "销售状态", "信立坦MAT销量", "信立坦销售份额"]
+                :,
+                [
+                    "医院编码",
+                    "医院名称",
+                    "医院类型",
+                    "省份",
+                    "城市",
+                    "社区医院内部潜力分位",
+                    "等级医院内部潜力分位",
+                    "等级+社区合并计算潜力分位",
+                    "终端潜力值",
+                    "销售状态",
+                    "信立坦MAT销量",
+                    "信立坦销售份额",
+                ],
             ]
 
             df.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
@@ -91,7 +109,9 @@ class Potential(pd.DataFrame):
                     "医院类型",
                     "省份",
                     "城市",
-                    "潜力分位",
+                    "社区医院内部潜力分位",
+                    "等级医院内部潜力分位",
+                    "等级+社区合并计算潜力分位",
                     "终端潜力值",
                     "潜力贡献",
                     "销售状态",
@@ -107,7 +127,9 @@ class Potential(pd.DataFrame):
                 "终端类型",
                 "省份",
                 "城市",
-                "潜力分位",
+                "社区医院内部潜力分位",
+                "等级医院内部潜力分位",
+                "等级+社区合并计算潜力分位",
                 "潜力(DOT)",
                 "潜力贡献",
                 "销售状态",
@@ -312,20 +334,32 @@ class Potential(pd.DataFrame):
             )  # pivot table对象转为默认df
             pivoted_access.set_index(index, inplace=True)
             # pivoted_access.reset_index(axis=1, inplace=True)
-            pivoted_access.columns = [
-                "无销量目标医院终端数量",
-                "有销量目标医院终端数量",
-                "非目标医院终端数量",
-                "无销量目标医院潜力(DOT)",
-                "有销量目标医院潜力(DOT)",
-                "非目标医院潜力(DOT)",
-            ]
-            pivoted_access["信立坦目标覆盖终端数量"] = (
-                pivoted_access["无销量目标医院终端数量"] + pivoted_access["有销量目标医院终端数量"]
-            )
-            pivoted_access["信立坦目标覆盖潜力(DOT %)"] = 1 - pivoted_access[
-                "非目标医院潜力(DOT)"
-            ] / pivoted_access.sum(axis=1)
+
+            if len(pivoted_access.columns) == 2:
+                pivoted_access.columns = [
+                    "有销量目标医院终端数量",
+                    "有销量目标医院潜力(DOT)",
+                ]
+                pivoted_access["信立坦目标覆盖终端数量"] = pivoted_access["有销量目标医院终端数量"]
+                pivoted_access["信立坦目标覆盖潜力(DOT %)"] = 1
+            else:
+                pivoted_access.columns = [
+                    "无销量目标医院终端数量",
+                    "有销量目标医院终端数量",
+                    "非目标医院终端数量",
+                    "无销量目标医院潜力(DOT)",
+                    "有销量目标医院潜力(DOT)",
+                    "非目标医院潜力(DOT)",
+                ]
+
+                pivoted_access["信立坦目标覆盖终端数量"] = (
+                    pivoted_access["无销量目标医院终端数量"] + pivoted_access["有销量目标医院终端数量"]
+                )
+
+                pivoted_access["信立坦目标覆盖潜力(DOT %)"] = 1 - pivoted_access[
+                    "非目标医院潜力(DOT)"
+                ] / pivoted_access.sum(axis=1)
+
             pivoted_access["信立坦销售覆盖终端数量"] = pivoted_access["有销量目标医院终端数量"]
             pivoted_access["信立坦销售覆盖潜力(DOT %)"] = pivoted_access[
                 "有销量目标医院潜力(DOT)"
@@ -469,7 +503,7 @@ class Potential(pd.DataFrame):
         # 获取工作表对象
         path = "%s%s潜力及销售表现表格.xlsx" % (self.savepath, self.name)
         wbk = xlsxwriter.Workbook(path, {"nan_inf_to_errors": True})
-        
+
         for index in lst_index:
             df = self.get_table(index, top=top, sort_by=sort_by)
             print(df)
@@ -480,8 +514,6 @@ class Potential(pd.DataFrame):
                 sht_name = index + "（已开户潜力）"
             elif index == "医院名称":
                 sht_name = "终端明细"
-            elif index == "潜力分位":
-                sht_name = "潜力分位（等级和社区医院合并计算）"
             else:
                 sht_name = index
             sht = wbk.add_worksheet(name=sht_name)
@@ -497,7 +529,9 @@ class Potential(pd.DataFrame):
                     "header_row": True,
                     "first_column": True,
                     "style": "Table Style Light 1",
-                    "columns": [{"header": c} for c in df.reset_index().columns.tolist()],
+                    "columns": [
+                        {"header": c} for c in df.reset_index().columns.tolist()
+                    ],
                     "autofilter": 0,
                 },
             )
@@ -535,34 +569,34 @@ class Potential(pd.DataFrame):
                 sht.set_column(0, 0, 8, format_abs)  # 医院编码
                 sht.set_column(1, 1, 38, format_abs)  # 医院名称
                 sht.set_column(2, 2, 8, format_abs)  # 医院类型
-                sht.set_column(3, 5, 8, format_abs)  # 省/市/潜力分位
-                sht.set_column(6, 6, width_wider, format_abs)  # 终端潜力
-                sht.set_column(7, 8, width_default, format_share)  # 潜力贡献/销售状态
-                sht.set_column(9, 9, width_default, format_abs)  # 信立坦销售
-                sht.set_column(10, 11, width_default, format_share)  # 信立坦销售量/销售份额
+                sht.set_column(3, 7, 8, format_abs)  # 省/市/潜力分位*3
+                sht.set_column(8, 8, width_wider, format_abs)  # 终端潜力
+                sht.set_column(9, 10, width_default, format_share)  # 潜力贡献/销售状态
+                sht.set_column(11, 11, width_default, format_abs)  # 信立坦销售
+                sht.set_column(12, 13, width_default, format_share)  # 信立坦销售量/销售份额
 
                 # 添加条件格式条形图
                 sht.conditional_format(  # 潜力贡献
                     first_row=1,
-                    first_col=7,
+                    first_col=9,
                     last_row=df.shape[0] - 1,
-                    last_col=7,
+                    last_col=9,
                     options={"type": "data_bar"},
                 )
 
                 sht.conditional_format(  # 信立坦销售贡献
                     first_row=1,
-                    first_col=10,
+                    first_col=12,
                     last_row=df.shape[0] - 1,
-                    last_col=10,
+                    last_col=12,
                     options={"type": "data_bar", "bar_color": "#D0B5FD"},
                 )
 
                 sht.conditional_format(  # 信立坦份额
                     first_row=1,
-                    first_col=11,
+                    first_col=13,
                     last_row=df.shape[0] - 1,
-                    last_col=11,
+                    last_col=13,
                     options={"type": "data_bar", "bar_color": "#B1E1C1"},
                 )
             elif index in ["事业部", "区域", "大区经理", "地区经理"]:
@@ -777,7 +811,7 @@ class Potential(pd.DataFrame):
             ytitle = "%s（%s）" % (ytitle, unit_index)
 
         # 根据不同index决定x轴标签是否旋转90度
-        if index == "潜力分位":
+        if index in ["社区医院内部潜力分位", "等级医院内部潜力分位", "等级+社区合并计算潜力分位"]:
             xlabel_rotation = 0
         else:
             xlabel_rotation = 90
@@ -887,7 +921,7 @@ class Potential(pd.DataFrame):
             ytitle = "%s（%s）" % (ytitle, unit_index)
 
         # 根据不同index决定x轴标签是否旋转90度
-        if index == "潜力分位":
+        if index in ["社区医院内部潜力分位", "等级医院内部潜力分位", "等级+社区合并计算潜力分位"]:
             xlabel_rotation = 0
         else:
             xlabel_rotation = 90
@@ -916,6 +950,89 @@ class Potential(pd.DataFrame):
             total_fontsize=12,
         )
 
+    def plot_2d_barline(
+        self,
+        value_bar,
+        value_line,
+        index,
+        unit_index=None,
+        top=None,
+    ):
+        aggfunc_bar = D_AGGFUNC[value_bar]
+        df_bar = self.get_pivot(
+            value=value_bar, index=index, column=None, aggfunc=aggfunc_bar
+        )
+        aggfunc_line = D_AGGFUNC[value_line]
+        df_line = self.get_pivot(
+            value=value_line, index=index, column=None, aggfunc=aggfunc_line
+        )
+        df_combined = pd.concat([df_bar, df_line], axis=1)
+
+        if value_bar == "终端潜力值" and value_line == "信立坦MAT销量":
+            df_line = df_combined[value_line] / df_combined[value_bar]
+            df_line.name = "信立坦MAT销售份额"
+        else:
+            df_line.name = value_line
+
+        print(df_line)
+
+        # 是否换单位
+        if unit_index is not None:
+            df_bar = df_bar / D_UNIT[unit_index]
+
+        # 是否只取top项，如只取top一些文本标签会变化
+        label_prefix = "各"
+        xtitle = index
+        if top is not None:
+            df_bar = df_bar.iloc[:top, :]
+            df_line = df_line.iloc[:top]
+            label_prefix = "TOP" + str(top)
+            xtitle = label_prefix + index
+
+        # 根据统计方式不同判断y轴标签及y轴显示逾限
+        if aggfunc_bar == len:
+            ytitle = "终端数量"
+        elif aggfunc_bar == sum:
+            ytitle = "潜力DOT"
+        ytitle = self.name + ytitle
+
+        # 如果换过单位在标签也要体现
+        if unit_index is not None:
+            ytitle = "%s（%s）" % (ytitle, unit_index)
+
+        # 根据不同index决定x轴标签是否旋转90度
+        if index in ["社区医院内部潜力分位", "等级医院内部潜力分位", "等级+社区合并计算潜力分位"]:
+            xlabel_rotation = 0
+        else:
+            xlabel_rotation = 90
+
+        # 图表标题
+        title = "%s%s%s%s vs. %s" % (
+            self.name,
+            label_prefix,
+            index,
+            value_bar,
+            value_line,
+        )
+
+        plot_barline(
+            df_bar=df_bar,
+            df_line=df_line,
+            savefile="%s%s柱状图.png" % (self.savepath, title.replace("\n", "")),
+            xlabel_rotation=xlabel_rotation,
+            y1fmt="",
+            show_y1label=False,
+            y1labelfmt="{:,.0f}",
+            y1labelthreshold=0,
+            y2fmt="",
+            y2labelfmt="{:.1%}",
+            title=title,
+            xtitle=xtitle,
+            ytitle=ytitle,
+            show_total=True,
+            total_fontsize=12,
+        )
+
     def plot_2d_bubble(
         self,
         value_x,
@@ -932,16 +1049,15 @@ class Potential(pd.DataFrame):
         fmt_y="{:,.0f}",
         label_limit=30,
         lim_y=None,
+        yavgline=True,
+        xavgline=True,
     ):
-        aggfunc1 = D_AGGFUNC[value_x]
-        df_x = self.get_pivot(
-            value="终端潜力值",
-            index=index,
-            column="销售状态",
-            aggfunc=aggfunc1,
-        )
 
-        df_x = df_x.loc[:, "有销量目标医院"]
+        df = self.get_table(index=index)
+        df["有量（已开户）潜力"] = df["潜力(DOT)"] * df["信立坦销售覆盖潜力(DOT %)"]
+
+        df_x = df["信立坦销售覆盖潜力(DOT %)"].drop("合计")
+        # df_x = df["有量（已开户）潜力"].drop("合计")
         print(df_x)
         # 是否取对数
         if log_x:
@@ -951,13 +1067,7 @@ class Potential(pd.DataFrame):
         if unit_index_x is not None:
             df_x = df_x / D_UNIT[unit_index_x]
 
-        aggfunc2 = D_AGGFUNC[value_y]
-        df_y = self.get_pivot(
-            value=value_y,
-            index=index,
-            column=None,
-            aggfunc=aggfunc2,
-        )
+        df_y = df["信立坦销售终端份额"].drop("合计")
 
         # 如果统计销售代表，一个lambda很难完成，需要进一步处理
         if value_y == "销售代表":
@@ -976,10 +1086,15 @@ class Potential(pd.DataFrame):
             df_y = df_y / D_UNIT[unit_index_y]
 
         # print(df_x,df_y)
-        df_combined = pd.concat([df_x, df_y], axis=1)
+        df_combined = pd.concat([df["潜力(DOT)"].drop("合计"), df_x, df_y], axis=1)
         df_combined.replace([np.inf, -np.inf, np.nan], 0, inplace=True)  # 所有异常值替换为0
 
-        df_combined.columns = ["信立坦已开户潜力", "信立坦已开户终端销售份额"]
+        df_combined.columns = [
+            "潜力(DOT)",
+            # "信立坦有量（已开户）潜力",
+            "信立坦有量（已开户）潜力占比",
+            "信立坦MAT销售份额",
+        ]
 
         # 是否只取top项，如只取top一些文本标签会变化
         label_prefix = "各"
@@ -1013,15 +1128,33 @@ class Potential(pd.DataFrame):
         if lim_y is not None:
             ylim = lim_y
 
-        title = "全国社区医院各城市已开户潜力 vs. 信立坦已开户终端销售份额"
-        xtitle = "信立坦已开户潜力"
-        ytitle = "信立坦已开户终端销售份额"
+        title = "各%s信立坦有量（已开户）潜力占比 vs. MAT销售份额" % index
+        xtitle = "信立坦有量（已开户）潜力占比"
+        
+        # title = "各%s信立坦有量（已开户）潜力 vs. MAT销售份额" % index
+        # xtitle = "信立坦有量（已开户）潜力"
+        ytitle = "信立坦MAT销售份额"
+
+        if xavgline is True:
+            xavg = df.loc["合计", "有量（已开户）潜力"] / df.loc["合计", "潜力(DOT)"]
+            xlabel = "平均有量（开户）潜力占比:%s" % "{:.1%}".format(xavg)
+        else:
+            xavg = None
+            xlabel = None
+        if yavgline is True:
+            yavg = df.loc["合计", "信立坦MAT销量(DOT)"] / df.loc["合计", "有量（已开户）潜力"]
+            ylabel = "平均份额:%s" % "{:.1%}".format(yavg)
+        else:
+            xavg = None
+            xlabel = None
+            
         # 绘图
         plot_bubble(
             savefile="%s%s气泡图.png" % (self.savepath, title.replace("\n", "")),
             x=df_combined[xtitle],
             y=df_combined[ytitle],
-            z=df_combined[xtitle] * df_combined[ytitle],
+            z=df_combined["潜力(DOT)"],
+            # z=df_combined[xtitle] * df_combined[ytitle],
             labels=df_combined.index,
             title=title,
             xtitle=xtitle,
@@ -1032,4 +1165,10 @@ class Potential(pd.DataFrame):
             label_limit=label_limit,
             with_reg=with_reg,
             ylim=ylim,
+            yavgline=yavgline,
+            yavg=yavg,
+            ylabel=ylabel,
+            xavgline=xavgline,
+            xavg=xavg,
+            xlabel=xlabel,
         )
